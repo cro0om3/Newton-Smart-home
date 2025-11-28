@@ -1,0 +1,12 @@
+streamlit
+pandas
+openpyxl
+python-docx
+pillow
+pdfkit
+reportlab
+convertapi
+docx2pdf
+requests
+streamlit-cropper
+aspose-words

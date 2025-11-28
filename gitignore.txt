@@ -1,0 +1,33 @@
+# Python / Streamlit
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.python-version
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build / cache
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.cache/
+build/
+dist/
+.coverage
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/credentials.toml
+
+# App data (keep templates & logos, ignore runtime Excel data)
+data/*.xlsx
+!data/*.docx
+!data/*.png
+!data/*.svg

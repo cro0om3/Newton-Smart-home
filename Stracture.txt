@@ -1,0 +1,16 @@
+your_app/
+│── main.py                     ← يحتوي الـ Navbar + نظام التحويل
+│── pages_custom/
+│     ├── quotation_page.py     ← كود الكوتيشن (كودك الحالي)
+│     ├── invoice_page.py       ← كود الفاتورة
+│     ├── receipt_page.py       ← كود الوصل (receipt)
+│     ├── dashboard_page.py     ← كود الداشبورد
+│
+│── data/
+│     ├── products.xlsx
+│     ├── records.xlsx
+│     ├── quotation_template.docx
+│     ├── invoice_template.docx
+│     ├── receipt_template.docx
+│
+│── requirements.txt
