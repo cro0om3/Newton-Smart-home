@@ -1,22 +1,18 @@
-from utils.settings import load_settings
-from utils.logger import log_event
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
-from docx import Document
 from io import BytesIO
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt, Cm
-import requests
 import base64
 import tempfile
 from streamlit.components.v1 import html as st_html
-import convertapi
+from utils.quotation_utils import render_quotation_html, html_to_pdf
 from pathlib import Path
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
+from utils.logger import log_event
+from utils.settings import load_settings
+ # تم حذف الاستيراد غير المستخدم requests
 
 def proper_case(text):
     if not text:
@@ -27,32 +23,21 @@ def proper_case(text):
         return text
 
 # Apply the same visual theme used in dashboard_page.py
-
-
 def _apply_quotation_theme():
     # Now inherits global Invoice theme from main.py
-    st.markdown(
-        '''<meta name="viewport" content="width=device-width, initial-scale=0.47, maximum-scale=0.47, user-scalable=no">
-        <style>
-        @media only screen and (max-width: 600px) {
-            body { zoom: 0.47 !important; }
-        }
-        </style>
-        ''', unsafe_allow_html=True)
-
+    st.markdown("<style></style>", unsafe_allow_html=True)
 
 def quotation_app():
     _apply_quotation_theme()
 
-    # (Header hero removed to match invoice page)
+        # (Header hero removed to match invoice page)
 
     # =========================
     # Helper
     # =========================
     def format_phone_input(raw_input):
         digits = ''.join(filter(str.isdigit, raw_input))
-        if digits.startswith("0"):
-            digits = digits[1:]
+        if digits.startswith("0"): digits = digits[1:]
         if digits.startswith("5") and len(digits) == 9:
             return f"+971 {digits[:2]} {digits[2:5]} {digits[5:]}"
         return None
@@ -61,41 +46,41 @@ def quotation_app():
     # UAE Locations
     # =========================
     uae_locations = [
-        "Abu Dhabi - Al Shamkha", "Abu Dhabi - Al Shawamekh", "Abu Dhabi - Khalifa City",
-        "Abu Dhabi - Al Bateen", "Abu Dhabi - Al Reem Island", "Abu Dhabi - Yas Island",
-        "Abu Dhabi - Al Mushrif", "Abu Dhabi - Al Rawdah", "Abu Dhabi - Al Muroor",
-        "Abu Dhabi - Baniyas", "Abu Dhabi - Mussafah", "Abu Dhabi - Al Mafraq",
-        "Abu Dhabi - Al Falah", "Abu Dhabi - MBZ City", "Abu Dhabi - Al Raha",
-        "Abu Dhabi - Al Maqtaa", "Abu Dhabi - Zayed Port", "Abu Dhabi - Saadiyat Island",
-        "Al Ain - Al Jimi", "Al Ain - Falaj Hazza", "Al Ain - Al Maqam",
-        "Al Ain - Zakher", "Al Ain - Hili", "Al Ain - Al Foah", "Al Ain - Al Mutaredh",
-        "Al Ain - Al Towayya", "Al Ain - Al Sarooj", "Al Ain - Al Nyadat",
-        "Dubai - Marina", "Dubai - Downtown", "Dubai - Business Bay",
-        "Dubai - Jumeirah", "Dubai - JBR", "Dubai - Al Barsha", "Dubai - Mirdif",
-        "Dubai - Deira", "Dubai - Bur Dubai", "Dubai - Silicon Oasis",
-        "Dubai - Academic City", "Dubai - Arabian Ranches", "Dubai - International City",
-        "Dubai - Dubai Hills", "Dubai - The Springs", "Dubai - The Meadows",
-        "Dubai - The Greens", "Dubai - Palm Jumeirah", "Dubai - Al Qusais",
-        "Dubai - Al Nahda", "Dubai - JVC", "Dubai - Damac Hills",
-        "Dubai - Discovery Gardens", "Dubai - IMPZ", "Dubai - Al Warqa",
+        "Abu Dhabi - Al Shamkha","Abu Dhabi - Al Shawamekh","Abu Dhabi - Khalifa City",
+        "Abu Dhabi - Al Bateen","Abu Dhabi - Al Reem Island","Abu Dhabi - Yas Island",
+        "Abu Dhabi - Al Mushrif","Abu Dhabi - Al Rawdah","Abu Dhabi - Al Muroor",
+        "Abu Dhabi - Baniyas","Abu Dhabi - Mussafah","Abu Dhabi - Al Mafraq",
+        "Abu Dhabi - Al Falah","Abu Dhabi - MBZ City","Abu Dhabi - Al Raha",
+        "Abu Dhabi - Al Maqtaa","Abu Dhabi - Zayed Port","Abu Dhabi - Saadiyat Island",
+        "Al Ain - Al Jimi","Al Ain - Falaj Hazza","Al Ain - Al Maqam",
+        "Al Ain - Zakher","Al Ain - Hili","Al Ain - Al Foah","Al Ain - Al Mutaredh",
+        "Al Ain - Al Towayya","Al Ain - Al Sarooj","Al Ain - Al Nyadat",
+        "Dubai - Marina","Dubai - Downtown","Dubai - Business Bay",
+        "Dubai - Jumeirah","Dubai - JBR","Dubai - Al Barsha","Dubai - Mirdif",
+        "Dubai - Deira","Dubai - Bur Dubai","Dubai - Silicon Oasis",
+        "Dubai - Academic City","Dubai - Arabian Ranches","Dubai - International City",
+        "Dubai - Dubai Hills","Dubai - The Springs","Dubai - The Meadows",
+        "Dubai - The Greens","Dubai - Palm Jumeirah","Dubai - Al Qusais",
+        "Dubai - Al Nahda","Dubai - JVC","Dubai - Damac Hills",
+        "Dubai - Discovery Gardens","Dubai - IMPZ","Dubai - Al Warqa",
         "Dubai - Nad Al Sheba",
-        "Sharjah - Al Majaz", "Sharjah - Al Nahda", "Sharjah - Al Taawun",
-        "Sharjah - Muwaileh", "Sharjah - Al Khan", "Sharjah - Al Yarmook",
-        "Sharjah - Al Qasimia", "Sharjah - Al Fisht", "Sharjah - Al Nasserya",
-        "Sharjah - Al Goaz", "Sharjah - Al Jubail", "Sharjah - Maysaloon",
-        "Ajman - Al Rashidiya", "Ajman - Al Nuaimiya", "Ajman - Al Mowaihat",
-        "Ajman - Al Rawda", "Ajman - Al Jurf", "Ajman - Al Hamidiya",
-        "Ajman - Al Rumailah", "Ajman - Al Bustan", "Ajman - City Center",
-        "RAK - Al Nakheel", "RAK - Al Dhait", "RAK - Julph",
-        "RAK - Khuzam", "RAK - Al Qusaidat", "RAK - Seih Al Uraibi",
-        "RAK - Al Rams", "RAK - Al Mairid", "RAK - Mina Al Arab",
-        "RAK - Al Hamra Village", "RAK - Marjan Island",
-        "Fujairah - Al Faseel", "Fujairah - Madhab", "Fujairah - Dibba",
-        "Fujairah - Sakamkam", "Fujairah - Mirbah", "Fujairah - Al Taween",
-        "Fujairah - Kalba", "Fujairah - Qidfa", "Fujairah - Al Aqah",
-        "UAQ - Al Salama", "UAQ - Al Haditha", "UAQ - Al Raas",
-        "UAQ - Al Dar Al Baida", "UAQ - Al Khor", "UAQ - Al Ramlah",
-        "UAQ - Al Maidan", "UAQ - Emirates City",
+        "Sharjah - Al Majaz","Sharjah - Al Nahda","Sharjah - Al Taawun",
+        "Sharjah - Muwaileh","Sharjah - Al Khan","Sharjah - Al Yarmook",
+        "Sharjah - Al Qasimia","Sharjah - Al Fisht","Sharjah - Al Nasserya",
+        "Sharjah - Al Goaz","Sharjah - Al Jubail","Sharjah - Maysaloon",
+        "Ajman - Al Rashidiya","Ajman - Al Nuaimiya","Ajman - Al Mowaihat",
+        "Ajman - Al Rawda","Ajman - Al Jurf","Ajman - Al Hamidiya",
+        "Ajman - Al Rumailah","Ajman - Al Bustan","Ajman - City Center",
+        "RAK - Al Nakheel","RAK - Al Dhait","RAK - Julph",
+        "RAK - Khuzam","RAK - Al Qusaidat","RAK - Seih Al Uraibi",
+        "RAK - Al Rams","RAK - Al Mairid","RAK - Mina Al Arab",
+        "RAK - Al Hamra Village","RAK - Marjan Island",
+        "Fujairah - Al Faseel","Fujairah - Madhab","Fujairah - Dibba",
+        "Fujairah - Sakamkam","Fujairah - Mirbah","Fujairah - Al Taween",
+        "Fujairah - Kalba","Fujairah - Qidfa","Fujairah - Al Aqah",
+        "UAQ - Al Salama","UAQ - Al Haditha","UAQ - Al Raas",
+        "UAQ - Al Dar Al Baida","UAQ - Al Khor","UAQ - Al Ramlah",
+        "UAQ - Al Maidan","UAQ - Emirates City",
     ]
 
     # =========================
@@ -103,28 +88,13 @@ def quotation_app():
     # =========================
     try:
         catalog = pd.read_excel("data/products.xlsx")
-    except Exception:
+    except:
         st.error("❌ ERROR: Cannot load product catalog")
         return
 
-    # ذكاء اكتشاف عمود Device أو ما يشابهه
-    possible_names = ["Device", "device", "PRODUCT",
-                      "Product", "Item", "Name", "الجهاز"]
-    found_col = None
-    for col in possible_names:
-        if col in catalog.columns:
-            found_col = col
-            break
-    if not found_col:
-        st.error("Missing column: Device or Product")
-        return
-    # إعادة تسمية العمود المختار إلى Device للاستخدام الداخلي
-    catalog = catalog.rename(columns={found_col: "Device"})
-    # تحقق من الأعمدة الأخرى المطلوبة
     required_cols = ["Device", "Description", "UnitPrice", "Warranty"]
     for col in required_cols:
         if col not in catalog.columns:
-            cols = st.columns([4, 0.7, 1, 1, 0.9, 0.7])
             st.error(f"❌ Missing column: {col}")
             return
 
@@ -136,14 +106,13 @@ def quotation_app():
             return df
         except:
             return pd.DataFrame(columns=[
-                "base_id", "date", "type", "number", "amount", "client_name", "phone", "location", "note"
+                "base_id","date","type","number","amount","client_name","phone","location","note"
             ])
 
     def save_record(rec: dict):
         df = load_records()
         if not df.empty and {"type", "number"}.issubset(df.columns):
-            df = df[~((df["type"] == rec.get("type")) &
-                      (df["number"] == rec.get("number")))]
+            df = df[~((df["type"] == rec.get("type")) & (df["number"] == rec.get("number")))]
         df = pd.concat([df, pd.DataFrame([rec])], ignore_index=True)
         if {"type", "number"}.issubset(df.columns):
             df = df.drop_duplicates(subset=["type", "number"], keep="last")
@@ -155,8 +124,8 @@ def quotation_app():
         path = "data/customers.xlsx"
         if not os.path.exists(path):
             cols = [
-                "client_name", "phone", "location", "email", "status",
-                "notes", "tags", "next_follow_up", "assigned_to", "last_activity"
+                "client_name","phone","location","email","status",
+                "notes","tags","next_follow_up","assigned_to","last_activity"
             ]
             pd.DataFrame(columns=cols).to_excel(path, index=False)
 
@@ -168,8 +137,8 @@ def quotation_app():
             return df
         except:
             return pd.DataFrame(columns=[
-                "client_name", "phone", "location", "email", "status",
-                "notes", "tags", "next_follow_up", "assigned_to", "last_activity"
+                "client_name","phone","location","email","status",
+                "notes","tags","next_follow_up","assigned_to","last_activity"
             ])
 
     def save_customers(df: pd.DataFrame):
@@ -189,10 +158,8 @@ def quotation_app():
                 exists = cdf[m].index[0]
             else:
                 # Try phone-based matching when names differ
-                cdf_phone = cdf.get("phone", pd.Series([], dtype=str)).apply(
-                    lambda x: x if pd.isna(x) else str(x))
+                cdf_phone = cdf.get("phone", pd.Series([], dtype=str)).apply(lambda x: x if pd.isna(x) else str(x))
                 try_phone = phone
-
                 def norm(x):
                     digits = ''.join(filter(str.isdigit, str(x)))
                     if digits.startswith('971') and len(digits) >= 12 and digits[3] == '5':
@@ -224,38 +191,32 @@ def quotation_app():
             # Update phone/location/last_activity for existing
             cdf.loc[exists, "client_name"] = proper_case(name)
             cdf.loc[exists, "phone"] = phone or cdf.loc[exists, "phone"]
-            cdf.loc[exists, "location"] = proper_case(
-                location) or cdf.loc[exists, "location"]
+            cdf.loc[exists, "location"] = proper_case(location) or cdf.loc[exists, "location"]
             # Quotation marks engagement start; keep status if set
             cdf.loc[exists, "status"] = cdf.loc[exists, "status"] or "New"
-            cdf.loc[exists, "last_activity"] = datetime.today().strftime(
-                '%Y-%m-%d')
+            cdf.loc[exists, "last_activity"] = datetime.today().strftime('%Y-%m-%d')
         save_customers(cdf)
 
     if "product_table" not in st.session_state:
         st.session_state.product_table = pd.DataFrame(columns=[
-            "Item No", "Product / Device", "Description",
-            "Qty", "Unit Price (AED)", "Line Total (AED)", "Warranty (Years)"
+            "Item No","Product / Device","Description",
+            "Qty","Unit Price (AED)","Line Total (AED)","Warranty (Years)"
         ])
 
     # =========================
     # CLIENT DETAILS
     # =========================
-    st.markdown('<div class="section-title">Quotation Summary</div>',
-                unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Quotation Summary</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
 
     with c1:
-        raw_name = st.text_input(
-            "Client Name", placeholder="Ahmed Omer", key="quo_client_name")
+        raw_name = st.text_input("Client Name", placeholder="Ahmed Omer", key="quo_client_name")
         client_name = proper_case(raw_name)
 
-        location_selected = st.selectbox(
-            "Project Location (UAE)", uae_locations, key="quo_loc")
+        location_selected = st.selectbox("Project Location (UAE)", uae_locations, key="quo_loc")
         client_location = proper_case(location_selected)
 
-        phone_raw = st.text_input(
-            "Mobile Number", placeholder="050xxxxxxx", key="quo_phone")
+        phone_raw = st.text_input("Mobile Number", placeholder="050xxxxxxx", key="quo_phone")
         client_phone = format_phone_input(phone_raw)
         if client_phone:
             st.success(f" {client_phone}")
@@ -263,20 +224,16 @@ def quotation_app():
     with c2:
         today = datetime.today().strftime('%Y%m%d')
         auto_quote = f"QUO-{today}-{len(st.session_state.product_table)+1:03d}"
-        quote_no = st.text_input(
-            "Quotation No", value=auto_quote, key="quo_no")
+        quote_no = st.text_input("Quotation No", value=auto_quote, key="quo_no")
 
-        prepared_by = proper_case(st.text_input(
-            "Prepared By", value="Mr Bukhari", key="quo_prepared"))
-        approved_by = proper_case(st.text_input(
-            "Approved By", value="Mr Mohammed", key="quo_approved"))
+        prepared_by = proper_case(st.text_input("Prepared By", value="Mr Bukhari", key="quo_prepared"))
+        approved_by = proper_case(st.text_input("Approved By", value="Mr Mohammed", key="quo_approved"))
 
     # =========================
     # PRODUCTS
     # =========================
     st.markdown("---")
-    st.markdown('<div class="section-title">Add Product</div>',
-                unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Add Product</div>', unsafe_allow_html=True)
 
     # Header row
     st.markdown("""
@@ -296,7 +253,7 @@ def quotation_app():
 
     if not df.empty:
         for idx, (i, row) in enumerate(df.iterrows()):
-            cols = st.columns([4.5, 0.7, 1, 1, 0.7, 0.7])
+            cols = st.columns([4.5,0.7,1,1,0.7,0.7])
 
             with cols[0]:
                 st.markdown(f"""
@@ -307,33 +264,28 @@ def quotation_app():
                 """, unsafe_allow_html=True)
 
             with cols[1]:
-                st.markdown(
-                    f"<div class='added-product-row'><span class='product-value'>{int(row['Qty'])}</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='added-product-row'><span class='product-value'>{int(row['Qty'])}</span></div>", unsafe_allow_html=True)
 
             with cols[2]:
-                st.markdown(
-                    f"<div class='added-product-row'><span class='product-value'>{row['Unit Price (AED)']:.2f}</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='added-product-row'><span class='product-value'>{row['Unit Price (AED)']:.2f}</span></div>", unsafe_allow_html=True)
 
             with cols[3]:
                 st.markdown(
-                    f"<div class='added-product-row'><span class='product-value'>{row['Line Total (AED)']:.2f}</span></div>",
+                    f"<div class='added-product-row'><span class='product-value'>AED {row['Line Total (AED)']:.2f}</span></div>",
                     unsafe_allow_html=True
                 )
 
             with cols[4]:
-                st.markdown(
-                    f"<div class='added-product-row'><span class='product-value'>{int(row['Warranty (Years)'])} yr</span></div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='added-product-row'><span class='product-value'>{int(row['Warranty (Years)'])} yr</span></div>", unsafe_allow_html=True)
 
             with cols[5]:
                 if st.button("❌", key=f"del_q_{i}"):
-                    st.session_state.product_table = st.session_state.product_table.drop(
-                        i).reset_index(drop=True)
-                    st.session_state.product_table["Item No"] = range(
-                        1, len(st.session_state.product_table)+1)
+                    st.session_state.product_table = st.session_state.product_table.drop(i).reset_index(drop=True)
+                    st.session_state.product_table["Item No"] = range(1, len(st.session_state.product_table)+1)
                     st.rerun()
 
     for entry_idx in range(st.session_state.num_entries):
-        cols = st.columns([4.5, 0.7, 1, 1, 0.7, 0.7])
+        cols = st.columns([4.5,0.7,1,1,0.7,0.7])
 
         with cols[0]:
             product = st.selectbox(
@@ -348,15 +300,13 @@ def quotation_app():
         if f"qty_val_{entry_idx}" not in st.session_state:
             st.session_state[f"qty_val_{entry_idx}"] = 1
         if f"price_val_{entry_idx}" not in st.session_state:
-            st.session_state[f"price_val_{entry_idx}"] = float(
-                row["UnitPrice"])
+            st.session_state[f"price_val_{entry_idx}"] = float(row["UnitPrice"])
         if f"war_val_{entry_idx}" not in st.session_state:
             st.session_state[f"war_val_{entry_idx}"] = int(row["Warranty"])
         # Sync price and warranty when product changes
         last_key = f"last_prod_{entry_idx}"
         if st.session_state.get(last_key) != product:
-            st.session_state[f"price_val_{entry_idx}"] = float(
-                row["UnitPrice"])
+            st.session_state[f"price_val_{entry_idx}"] = float(row["UnitPrice"])
             st.session_state[f"war_val_{entry_idx}"] = int(row["Warranty"])
             st.session_state[last_key] = product
 
@@ -386,7 +336,7 @@ def quotation_app():
 
         with cols[3]:
             st.markdown(
-                f"<div class='added-product-row'><span class='product-value'>{line_price:.2f}</span></div>",
+                f"<div class='added-product-row'><span class='product-value'>AED {line_price:.2f}</span></div>",
                 unsafe_allow_html=True
             )
 
@@ -404,6 +354,16 @@ def quotation_app():
 
         with cols[5]:
             if st.button("✅", key=f"add_row_{entry_idx}"):
+                # attempt to attach image info from catalog (ImagePath or ImageBase64)
+                image_val = None
+                try:
+                    if 'ImagePath' in catalog.columns and not pd.isna(row.get('ImagePath')):
+                        image_val = str(row.get('ImagePath'))
+                    elif 'ImageBase64' in catalog.columns and not pd.isna(row.get('ImageBase64')):
+                        image_val = str(row.get('ImageBase64'))
+                except Exception:
+                    image_val = None
+
                 new_row = {
                     "Item No": len(st.session_state.product_table) + 1,
                     "Product / Device": product,
@@ -412,6 +372,10 @@ def quotation_app():
                     "Unit Price (AED)": price,
                     "Line Total (AED)": line_price,
                     "Warranty (Years)": warranty,
+                    # keep both raw columns for Word export and a normalized `image` for HTML rendering
+                    "ImagePath": row.get('ImagePath') if 'ImagePath' in row.index else None,
+                    "ImageBase64": row.get('ImageBase64') if 'ImageBase64' in row.index else None,
+                    "image": image_val,
                 }
                 st.session_state.product_table = pd.concat(
                     [st.session_state.product_table, pd.DataFrame([new_row])],
@@ -421,8 +385,7 @@ def quotation_app():
 
     st.markdown("---")
 
-    product_total = st.session_state.product_table["Line Total (AED)"].sum(
-    ) if not st.session_state.product_table.empty else 0
+    product_total = st.session_state.product_table["Line Total (AED)"].sum() if not st.session_state.product_table.empty else 0
 
     # =========================
     # SUMMARY (match invoice)
@@ -431,18 +394,14 @@ def quotation_app():
     col_left, col_right = st.columns([1, 1])
 
     with col_left:
-        st.markdown("<div class='section-title'>Project Costs</div>",
-                    unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>Project Costs</div>", unsafe_allow_html=True)
 
         # Pull persisted values (so left card reflects right inputs)
-        installation_cost_val = st.session_state.get(
-            "install_cost_quo_value", 0.0)
+        installation_cost_val = st.session_state.get("install_cost_quo_value", 0.0)
         discount_value_val = st.session_state.get("disc_value_quo_value", 0.0)
-        discount_percent_val = st.session_state.get(
-            "disc_percent_quo_value", 0.0)
+        discount_percent_val = st.session_state.get("disc_percent_quo_value", 0.0)
 
-        percent_value = (product_total + installation_cost_val) * \
-            (discount_percent_val / 100)
+        percent_value = (product_total + installation_cost_val) * (discount_percent_val / 100)
         total_discount = percent_value + discount_value_val
         grand_total = (product_total + installation_cost_val) - total_discount
 
@@ -471,8 +430,7 @@ def quotation_app():
         )
 
     with col_right:
-        st.markdown(
-            "<div class='section-title'>Installation & Discount</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>Installation & Discount</div>", unsafe_allow_html=True)
 
         installation_cost = st.number_input(
             "Installation & Operation Devices (AED)",
@@ -482,16 +440,13 @@ def quotation_app():
         )
         st.session_state["install_cost_quo_value"] = installation_cost
 
-        st.markdown("<div style='margin-top:12px;'></div>",
-                    unsafe_allow_html=True)
+        st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
         cD1, cD2 = st.columns(2)
         with cD1:
-            discount_value = st.number_input(
-                "Discount Value (AED)", min_value=0.0, key="disc_value_quo")
+            discount_value = st.number_input("Discount Value (AED)", min_value=0.0, key="disc_value_quo")
             st.session_state["disc_value_quo_value"] = discount_value
         with cD2:
-            discount_percent = st.number_input(
-                "Discount %", min_value=0.0, max_value=100.0, key="disc_percent_quo")
+            discount_percent = st.number_input("Discount %", min_value=0.0, max_value=100.0, key="disc_percent_quo")
             st.session_state["disc_percent_quo_value"] = discount_percent
 
     # =========================
@@ -510,11 +465,9 @@ def quotation_app():
         image_path_map = {}
         try:
             if 'ImageBase64' in catalog.columns:
-                image_map = dict(
-                    zip(catalog['Device'].astype(str), catalog['ImageBase64']))
+                image_map = dict(zip(catalog['Device'].astype(str), catalog['ImageBase64']))
             if 'ImagePath' in catalog.columns:
-                image_path_map = dict(
-                    zip(catalog['Device'].astype(str), catalog['ImagePath']))
+                image_path_map = dict(zip(catalog['Device'].astype(str), catalog['ImagePath']))
         except Exception:
             image_map = {}
             image_path_map = {}
@@ -532,8 +485,7 @@ def quotation_app():
                     return False
                 # تفريغ محتوى الخلية ثم إدراج الصورة في فقرة محاذاة للوسط
                 cell.text = ""
-                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph(
-                    "")
+                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph("")
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 run = p.add_run()
                 run.add_picture(bio, width=Cm(width_cm), height=Cm(height_cm))
@@ -557,17 +509,10 @@ def quotation_app():
                         new = new.replace(key, "" if val is None else str(val))
                     if old != new:
                         cell.text = new
-                        # إذا كانت الخلية تحتوي على قيمة QTY بعد الاستبدال، اجعل المحاذاة Center
-                        if "{{QTY}}" in old or (str(data.get("{{QTY}}")) in new and "QTY" in old):
-                            format_cell(
-                                cell, "Times New Roman (Headings CS)", 10, WD_ALIGN_PARAGRAPH.CENTER)
-                        else:
-                            format_cell(
-                                cell, "Times New Roman (Headings CS)", 10, WD_ALIGN_PARAGRAPH.LEFT)
+                        format_cell(cell, "Times New Roman (Headings CS)", 10, WD_ALIGN_PARAGRAPH.LEFT)
 
         # Insert products from session state
-        products = st.session_state.product_table.to_dict(
-            "records") if "product_table" in st.session_state else []
+        products = st.session_state.product_table.to_dict("records") if "product_table" in st.session_state else []
 
         target_table = None
         for table in doc.tables:
@@ -599,8 +544,7 @@ def quotation_app():
             prod_name = str(product.get("Product / Device", ""))
             b64_img = image_map.get(prod_name)
             img_path = image_path_map.get(prod_name)
-            placed = insert_image_in_cell(
-                row.cells[1], b64_img, _wcm, _hcm, img_path)
+            placed = insert_image_in_cell(row.cells[1], b64_img, _wcm, _hcm, img_path)
             if not placed:
                 row.cells[1].text = prod_name
             row.cells[2].text = str(product.get("Description", ""))
@@ -611,9 +555,8 @@ def quotation_app():
             for cell in row.cells:
                 format_cell(cell, "Arial MT", 9, WD_ALIGN_PARAGRAPH.CENTER)
 
-        # حذف الصفوف الفارغة بعد المنتجات وأيضاً صف 'last' نفسه
         delete_start = start_row + len(products)
-        for j in range(last_index, delete_start - 1, -1):
+        for j in range(last_index - 1, delete_start - 1, -1):
             row = target_table.rows[j]
             target_table._tbl.remove(row._tr)
 
@@ -623,50 +566,69 @@ def quotation_app():
         return buffer
 
     def convert_to_pdf(word_buffer: BytesIO) -> bytes:
-        # Use official ConvertAPI SDK; write temp DOCX then convert
-        convertapi.api_credentials = 'kbUBO3z9214I9rxEoRQwhkProocqlwJD'
-        with tempfile.TemporaryDirectory() as tmpdir:
-            docx_path = os.path.join(tmpdir, 'quotation.docx')
-            with open(docx_path, 'wb') as f:
-                f.write(word_buffer.getvalue())
-            result = convertapi.convert(
-                'pdf',
-                {
-                    'File': docx_path,
-                    'FileName': 'quotation'
-                },
-                from_format='docx'
-            )
-            saved = result.save_files(tmpdir)
-            if not saved:
-                raise Exception('ConvertAPI returned no files')
-            pdf_path = saved[0]
-            with open(pdf_path, 'rb') as pf:
-                return pf.read()
+        # Deprecated: DOCX->PDF via ConvertAPI removed.
+        # Instead render HTML template and convert to PDF directly.
+        products = st.session_state.product_table.to_dict('records') if 'product_table' in st.session_state else []
+        data = {
+            'client_name': st.session_state.get('quo_client_name', ''),
+            'client_location': st.session_state.get('quo_loc', ''),
+            'quote_no': st.session_state.get('quo_no', ''),
+        }
+        html = render_quotation_html({
+            'company_name': load_settings().get('company_name', 'Newton Smart Home'),
+            'quotation_number': data.get('quote_no', ''),
+            'quotation_date': datetime.today().strftime('%Y-%m-%d'),
+            'valid_until': '',
+            'status': 'Pending Approval',
+            'client_name': data.get('client_name', ''),
+            'client_company': '',
+            'client_address': data.get('client_location', ''),
+            'client_city': '',
+            'client_trn': '',
+            'project_title': '',
+            'project_location': data.get('client_location', ''),
+            'project_scope': '',
+            'project_notes': '',
+            'items': products,
+            'subtotal': sum([float(p.get('Line Total (AED)', 0) or 0) for p in products]),
+            'Installation': float(st.session_state.get('install_cost_quo_value', 0.0) or 0.0),
+            'vat_amount': 0,
+            'total_amount': sum([float(p.get('Line Total (AED)', 0) or 0) for p in products]),
+            'bank_name': load_settings().get('bank_name', ''),
+            'bank_account': load_settings().get('bank_account', ''),
+            'bank_iban': load_settings().get('bank_iban', ''),
+            'bank_company': load_settings().get('company_name', 'Newton Smart Home'),
+            'sig_name': load_settings().get('default_prepared_by', ''),
+            'sig_role': load_settings().get('default_approved_by', ''),
+        })
+        return html_to_pdf(html)
 
     def _auto_download(data_bytes: bytes, filename: str, mime: str):
         b64 = base64.b64encode(data_bytes).decode('utf-8')
         # Visible fallback link (in case browser blocks auto-download)
         st.markdown(
-            f"If the download doesn't start, click here: [Download {filename}](data:{mime};base64,{b64})", unsafe_allow_html=True)
-        st_html(f"""
-            <script>
-            (function(){{
-              const b64 = '{b64}';
-              const mime = '{mime}';
-              const fname = '{filename}'.replace(/[^\w\-\./]/g,'_');
-              const byteChars = atob(b64);
-              const byteNumbers = new Array(byteChars.length);
-              for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
-              const byteArray = new Uint8Array(byteNumbers);
-              const blob = new Blob([byteArray], {{type: mime}});
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url; a.download = fname; document.body.appendChild(a); a.click();
-              setTimeout(()=>{{ URL.revokeObjectURL(url); a.remove(); }}, 1000);
-            }})();
-            </script>
-        """, height=0)
+            f"If the download doesn't start, click here: [Download {filename}](data:{mime};base64,{b64})",
+            unsafe_allow_html=True,
+        )
+        # Build a compact JS snippet for auto-download. Escape backslashes carefully.
+        js = (
+            "<script>"
+            "(function(){"
+            f"const b64='{b64}';"
+            f"const mime='{mime}';"
+            "const byteChars=atob(b64);"
+            "const byteNumbers=new Array(byteChars.length);"
+            "for(let i=0;i<byteChars.length;i++)byteNumbers[i]=byteChars.charCodeAt(i);"
+            "const byteArray=new Uint8Array(byteNumbers);"
+            "const blob=new Blob([byteArray],{type:mime});"
+            "const url=URL.createObjectURL(blob);"
+            "const a=document.createElement('a');a.href=url;"
+            f"a.download='{filename}';"
+            "document.body.appendChild(a);a.click();"
+            "setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1000);"
+            "})();</script>"
+        )
+        st_html(js, height=0)
 
     def _save_export_locally(data_bytes: bytes, filename: str) -> str:
         out_dir = Path('data') / 'exports'
@@ -677,8 +639,7 @@ def quotation_app():
         return str(out_path)
 
     st.markdown("---")
-    st.markdown('<div class="section-title">Export Quotation</div>',
-                unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Export Quotation</div>', unsafe_allow_html=True)
 
     # Button colors (blue for Word, red for PDF)
     st.markdown(
@@ -700,21 +661,13 @@ def quotation_app():
     )
 
     # Recalculate using the Installation & Discount values (to mirror invoice)
-    product_total = st.session_state.product_table["Line Total (AED)"].sum(
-    ) if not st.session_state.product_table.empty else 0.0
+    product_total = st.session_state.product_table["Line Total (AED)"].sum() if not st.session_state.product_table.empty else 0.0
     installation_cost_val = st.session_state.get("install_cost_quo_value", 0.0)
     discount_value_val = st.session_state.get("disc_value_quo_value", 0.0)
     discount_percent_val = st.session_state.get("disc_percent_quo_value", 0.0)
-    percent_value = (product_total + installation_cost_val) * \
-        (discount_percent_val / 100)
+    percent_value = (product_total + installation_cost_val) * (discount_percent_val / 100)
     total_discount = percent_value + discount_value_val
     grand_total = (product_total + installation_cost_val) - total_discount
-
-    qty_sum = (
-        st.session_state.product_table["Qty"].sum()
-        if not st.session_state.product_table.empty
-        else 0
-    )
 
     data_to_fill = {
         "{{client_name}}": client_name,
@@ -729,7 +682,6 @@ def quotation_app():
         "{{installation_cost}}": f"{installation_cost_val:,.2f}",
         "{{Price}}": f"{product_total:,.2f}",
         "{{Total}}": f"{grand_total:,.2f}",
-        "{{QTY}}": qty_sum,
         # Extra keys (no-op if not present in template)
         "{{discount_value}}": f"{discount_value_val:,.2f}",
         "{{discount_percent}}": f"{discount_percent_val:,.0f}",
@@ -737,13 +689,13 @@ def quotation_app():
         "{{grand_total}}": f"{grand_total:,.2f}",
     }
 
-    # زرّان بجانب بعض: تحميل Word وPDF في نفس الصف
-    try:
-        word_ready = generate_word_file(data_to_fill)
-        export_cols = st.columns([1, 1])
-        pdf_ready = st.session_state.get("pdf_ready_quo")
-        clicked_word = None
-        with export_cols[0]:
+    # Always show the two action buttons side-by-side
+    b1, b2 = st.columns(2)
+
+    # Simple, invoice-style: pre-render a download_button for Word
+    with b1:
+        try:
+            word_ready = generate_word_file(data_to_fill)
             clicked_word = st.download_button(
                 label="Download Word",
                 data=word_ready.getvalue(),
@@ -751,45 +703,105 @@ def quotation_app():
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 key=f"dl_word_{quote_no}"
             )
-        if clicked_word:
-            # حفظ السجل وتحديث العملاء
-            today_id = datetime.today().strftime('%Y%m%d')
-            existing = load_records()
-            if not existing.empty and "base_id" in existing.columns:
-                same_day = existing[existing.get("base_id", "").astype(
-                    str).str.contains(today_id, na=False)]
-                seq = len(same_day) + 1
-            else:
-                seq = 1
-            base_id = f"{today_id}-{str(seq).zfill(3)}"
-            save_record({
-                "base_id": base_id,
-                "date": datetime.today().strftime('%Y-%m-%d'),
-                "type": "q",
-                "number": quote_no,
-                "amount": grand_total,
-                "client_name": client_name,
-                "phone": phone_raw,
-                "location": client_location,
-                "note": ""
-            })
-            upsert_customer_from_quotation(
-                client_name, phone_raw, client_location)
-            user = st.session_state.get("user", {})
-            log_event(user.get("name", "Unknown"), "Quotation", "quotation_created",
-                      f"Client: {client_name}, Amount: {grand_total}")
-            st.success(f"✅ Saved quotation to records with base {base_id}")
-            # توليد PDF بعد نجاح تحميل Word وتخزينه في session_state
-            pdf_ready = convert_to_pdf(word_ready)
-            st.session_state["pdf_ready_quo"] = pdf_ready
-        with export_cols[1]:
-            if pdf_ready:
-                st.download_button(
-                    label="Download PDF",
-                    data=pdf_ready,
-                    file_name=f"Quotation_{client_name}_{quote_no}.pdf",
-                    mime="application/pdf",
-                    key=f"dl_pdf_after_word_{quote_no}"
-                )
+            if clicked_word:
+                # Save record after user downloads (same behavior as invoice)
+                today_id = datetime.today().strftime('%Y%m%d')
+                existing = load_records()
+                if not existing.empty and "base_id" in existing.columns:
+                    same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
+                    seq = len(same_day) + 1
+                else:
+                    seq = 1
+                base_id = f"{today_id}-{str(seq).zfill(3)}"
+                save_record({
+                    "base_id": base_id,
+                    "date": datetime.today().strftime('%Y-%m-%d'),
+                    "type": "q",
+                    "number": quote_no,
+                    "amount": grand_total,
+                    "client_name": client_name,
+                    "phone": phone_raw,
+                    "location": client_location,
+                    "note": ""
+                })
+                upsert_customer_from_quotation(client_name, phone_raw, client_location)
+                # Log quotation creation
+                user = st.session_state.get("user", {})
+                log_event(user.get("name", "Unknown"), "Quotation", "quotation_created", 
+                         f"Client: {client_name}, Amount: {grand_total}")
+                st.success(f"✅ Saved quotation to records with base {base_id}")
+        except Exception as e:
+            st.error(f"❌ Unable to prepare Word file: {e}")
+
+    # PDF: keep a click-to-generate then download button for reliability
+    with b2:
+        try:
+            # Pre-generate PDF bytes for single-click download (may take a moment)
+            word_for_pdf = generate_word_file(data_to_fill)
+            pdf_ready = convert_to_pdf(word_for_pdf)
+            clicked_pdf = st.download_button(
+                label="Download PDF",
+                data=pdf_ready,
+                file_name=f"Quotation_{client_name}_{quote_no}.pdf",
+                mime="application/pdf",
+                key=f"dl_pdf_{quote_no}"
+            )
+            if clicked_pdf:
+                today_id = datetime.today().strftime('%Y%m%d')
+                existing = load_records()
+                if not existing.empty and "base_id" in existing.columns:
+                    same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
+                    seq = len(same_day) + 1
+                else:
+                    seq = 1
+                base_id = f"{today_id}-{str(seq).zfill(3)}"
+                save_record({
+                    "base_id": base_id,
+                    "date": datetime.today().strftime('%Y-%m-%d'),
+                    "type": "q",
+                    "number": quote_no,
+                    "amount": grand_total,
+                    "client_name": client_name,
+                    "phone": phone_raw,
+                    "location": client_location,
+                    "note": "PDF"
+                })
+                upsert_customer_from_quotation(client_name, phone_raw, client_location)
+                st.success(f"✅ Saved PDF quotation with base {base_id}")
+        except Exception as e:
+            st.error(f"❌ Unable to prepare PDF: {e}")
+
+    # Provide Download HTML button (separate row)
+    try:
+        html_content = render_quotation_html({
+            'company_name': load_settings().get('company_name', 'Newton Smart Home'),
+            'quotation_number': quote_no,
+            'quotation_date': datetime.today().strftime('%Y-%m-%d'),
+            'valid_until': '',
+            'status': 'Pending Approval',
+            'client_name': client_name,
+            'client_company': '',
+            'client_address': client_location,
+            'client_city': '',
+            'client_trn': '',
+            'project_title': '',
+            'project_location': client_location,
+            'project_scope': '',
+            'project_notes': '',
+            'items': st.session_state.product_table.to_dict('records') if 'product_table' in st.session_state else [],
+            'subtotal': product_total,
+            'Installation': float(st.session_state.get('install_cost_quo_value', 0.0) or 0.0),
+            'vat_amount': 0,
+            'total_amount': grand_total,
+            'bank_name': load_settings().get('bank_name', ''),
+            'bank_account': load_settings().get('bank_account', ''),
+            'bank_iban': load_settings().get('bank_iban', ''),
+            'bank_company': load_settings().get('company_name', 'Newton Smart Home'),
+            'sig_name': load_settings().get('default_prepared_by', ''),
+            'sig_role': load_settings().get('default_approved_by', ''),
+        })
+        if st.button('Download HTML'):
+            st.download_button('Download Quotation (HTML)', html_content, file_name=f"Quotation_{client_name}_{quote_no}.html", mime='text/html')
     except Exception as e:
-        st.error(f"❌ Unable to prepare Word/PDF file: {e}")
+        st.error(f"❌ Unable to prepare HTML: {e}")
+

@@ -180,20 +180,8 @@ if not st.session_state.authenticated:
 # User is authenticated - continue with app
 
 # Load logo as data URI
-def _load_logo_datauri():
-    candidates = ["data/newton_logo.png", "data/newton_logo.svg", "data/logo.png", "data/logo.svg"]
-    base = os.path.dirname(__file__)
-    for rel in candidates:
-        path = os.path.join(base, rel)
-        if os.path.exists(path):
-            ext = os.path.splitext(path)[1].lower()
-            mime = "image/png" if ext == ".png" else "image/svg+xml" if ext == ".svg" else None
-            if not mime:
-                continue
-            with open(path, "rb") as f:
-                data = b64encode(f.read()).decode("utf-8")
-            return f"data:{mime};base64,{data}"
-    return None
+
+
 
 st.markdown(
     """
@@ -385,7 +373,7 @@ st.markdown(
     }
 
     /* Common utility classes from Invoice theme */
-    .section-title{ font-size:20px; font-weight:700; margin:18px `0 10px; color:var(--ink); }
+    .section-title{ font-size:20px; font-weight:700; margin:18px 0 10px; color:var(--ink); }
     .added-product-row{
         background:#ffffff; padding:10px 14px; border:1px solid rgba(0,0,0,.08);
         border-radius:12px; margin-bottom:6px; box-shadow:0 2px 6px rgba(0,0,0,.05);
@@ -728,7 +716,7 @@ st.markdown(
     }
 
     /* Common utility classes from Invoice theme */
-    .section-title{ font-size:20px; font-weight:700; margin:18px `0 10px; color:var(--ink); }
+    .section-title{ font-size:20px; font-weight:700; margin:18px 0 10px; color:var(--ink); }
     .added-product-row{
         background:#ffffff; padding:10px 14px; border:1px solid rgba(0,0,0,.08);
         border-radius:12px; margin-bottom:6px; box-shadow:0 2px 6px rgba(0,0,0,.05);

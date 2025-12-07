@@ -10,3 +10,5 @@ docx2pdf
 requests
 streamlit-cropper
 aspose-words
+weasyprint
+Jinja2
