@@ -25,7 +25,7 @@ ctx = {
     'rtl': False,
 }
 
-html = render_quotation_html(ctx)
+html = render_quotation_html(ctx, template_name="newton_quotation_A4.html")
 out_dir = Path('data') / 'exports'
 out_dir.mkdir(parents=True, exist_ok=True)
 with open(out_dir / 'test_quotation.html', 'w', encoding='utf-8') as f:

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Quotation - Newton Smart Home</title>
+    <title>Receipt - Newton Smart Home</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
         :root {
@@ -25,7 +25,12 @@
             box-sizing: border-box;
         }
 
-        body {
+        @page {
+            size: A4;
+            margin: 12mm 10mm;
+        }
+
+body {
             margin: 0;
             padding: 32px 16px;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -45,6 +50,10 @@
             box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18);
             padding: 30px 32px 34px;
         }
+        .page-break {
+            page-break-before: always;
+        }
+
 
         @media print {
             body {
@@ -553,11 +562,11 @@
             <div class="meta-title-block">
                 <div class="badge">
                     <span class="badge-dot"></span>
-                    <span>Quotation</span>
+                    <span>Receipt</span>
                 </div>
-                <h1>Official Offer</h1>
+                <h1>Payment Receipt</h1>
                 <p>
-                    This quotation outlines the supply and commissioning of Newton Smart Home solutions for the
+                    This receipt confirms payment for Newton Smart Home solutions for the
                     individual client below.
                 </p>
             </div>
@@ -571,12 +580,8 @@
                     <td class="value">{{ quotation_date }}</td>
                 </tr>
                 <tr>
-                    <td class="label">Valid Until</td>
-                    <td class="value">{{ valid_until }}</td>
-                </tr>
-                <tr>
                     <td class="label">Status</td>
-                    <td class="value">Pending Approval</td>
+                    <td class="value">Approved</td>
                 </tr>
             </table>
         </div>
@@ -667,19 +672,29 @@
                 </div>
                 <div class="totals-card">
                     <div class="totals-row label">
-                        <span>Sub-total</span>
-                        <span class="value">{{ subtotal | currency }}</span>
+                        <span>Total Invoice Amount</span>
+                        <span class="value">{{ total_invoice_amount | currency }}</span>
                     </div>
                     <div class="totals-row label">
-                        <span>Installation & Operation </span>
-                        <span class="value">{{ (Installation | default(0)) | currency }}</span>
+                        <span>Amount Paid</span>
+                        <span class="value">{{ amount_paid | currency }}</span>
+                    </div>
+                    <div class="totals-row label">
+                        <span>Payment Method</span>
+                        <span class="value">{{ payment_method }}</span>
+                    </div>
+                    <div class="totals-row label">
+                        <span>Payment Date</span>
+                        <span class="value">{{ payment_date }}</span>
                     </div>
                     <div class="totals-row total">
-                        <span>Total Amount</span>
-                        <span class="value">{{ total_amount | currency }}</span>
+                        <span>Remaining Balance</span>
+                        <span class="value">{{ remaining_balance | currency }}</span>
                     </div>
                 </div>
             </div>
+
+            <div class="page-break"></div>
 
             <div class="section">
                 <div class="section-label"></div>

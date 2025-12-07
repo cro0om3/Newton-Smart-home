@@ -7,7 +7,7 @@ import base64
 import mimetypes
 
 
-def render_quotation_html(context: Dict[str, Any], template_name: str = "newton_quotation_individual.html") -> str:
+def render_quotation_html(context: Dict[str, Any], template_name: str = "newton_quotation_A4.html") -> str:
     """Render the quotation HTML from given context and template.
 
     Args:

@@ -573,11 +573,11 @@
             <table class="meta-table">
                 <tr>
                     <td class="label">Quotation No.</td>
-                    <td class="value">QT-TEST-001</td>
+                    <td class="value">{{ quotation_number }}</td>
                 </tr>
                 <tr>
                     <td class="label">Date</td>
-                    <td class="value"></td>
+                    <td class="value">{{ quotation_date }}</td>
                 </tr>
                 <tr>
                     <td class="label">Status</td>
@@ -591,17 +591,17 @@
             <div class="bill-grid">
                 <div class="bill-card">
                     <div class="bill-label">Client info</div>
-                    <div class="bill-name"></div>
+                    <div class="bill-name">{{ client_name }}</div>
                     <div class="bill-text">
-                        Mobile: <br />
-                        Location: <br />
+                        Mobile: {{ mobile }}<br />
+                        Location: {{ project_location }}<br />
                     </div>
                 </div>
                 <div class="bill-card">
                     <div class="bill-label">Project Details</div>
                     <div class="bill-name">Project Title</div>
                     <div class="bill-text">
-                        .
+                        {{ project_scope }}.
                     </div>
                 </div>
             </div>
@@ -621,37 +621,25 @@
                     </tr>
                 </thead>
                 <tbody>
-                    
+                    {% for item in items %}
                     <tr>
                         <td class="image">
                             <div class="item-image-slot">
-                                
+                                {% if item.image %}
+                                <img src="{{ item.image }}" alt="{{ item.description }}"
+                                    style="max-width:100%;max-height:100%;object-fit:contain;" />
+                                {% else %}
                                 IMAGE
-                                
+                                {% endif %}
                             </div>
                         </td>
-                        <td>Test product A</td>
-                        <td class="warranty"></td>
-                        <td class="qty">2</td>
-                        <td class="price">100</td>
-                        <td class="total">200</td>
+                        <td>{{ item.description }}</td>
+                        <td class="warranty">{{ item.warranty }}</td>
+                        <td class="qty">{{ item.qty }}</td>
+                        <td class="price">{{ item.unit_price }}</td>
+                        <td class="total">{{ item.total }}</td>
                     </tr>
-                    
-                    <tr>
-                        <td class="image">
-                            <div class="item-image-slot">
-                                
-                                IMAGE
-                                
-                            </div>
-                        </td>
-                        <td>Test product B</td>
-                        <td class="warranty"></td>
-                        <td class="qty">1</td>
-                        <td class="price">300</td>
-                        <td class="total">300</td>
-                    </tr>
-                    
+                    {% endfor %}
                 </tbody>
             </table>
             <div class="totals-area">
@@ -685,35 +673,35 @@
                 <div class="totals-card">
                     <div class="totals-row label">
                         <span>Sub-total</span>
-                        <span class="value">AED 500.00</span>
+                        <span class="value">{{ subtotal | currency }}</span>
                     </div>
                     <div class="totals-row label">
                         <span>Installation &amp; Operation</span>
-                        <span class="value">AED 0.00</span>
+                        <span class="value">{{ (Installation | default(0)) | currency }}</span>
                     </div>
                     <div class="totals-row label">
                         <span>Discount</span>
-                        <span class="value">AED 0.00</span>
+                        <span class="value">{{ (discount | default(0)) | currency }}</span>
                     </div>
                     <div class="totals-row label">
                         <span>VAT</span>
-                        <span class="value">AED 0.00</span>
+                        <span class="value">{{ (vat | default(0)) | currency }}</span>
                     </div>
                     <div class="totals-row total">
                         <span>Total Invoice Amount</span>
-                        <span class="value">AED 500.00</span>
+                        <span class="value">{{ total_amount | currency }}</span>
                     </div>
                     <div class="totals-row label" style="margin-top:10px;">
                         <span>Down Payment</span>
-                        <span class="value">AED 0.00</span>
+                        <span class="value">{{ (down_payment | default(0)) | currency }}</span>
                     </div>
                     <div class="totals-row label">
                         <span>Previously Paid</span>
-                        <span class="value">AED 0.00</span>
+                        <span class="value">{{ (previously_paid | default(0)) | currency }}</span>
                     </div>
                     <div class="totals-row total">
                         <span>Balance Due</span>
-                        <span class="value"></span>
+                        <span class="value">{{ balance_due | currency }}</span>
                     </div>
                 </div>
             </div>

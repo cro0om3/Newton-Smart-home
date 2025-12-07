@@ -11,6 +11,8 @@ from pages_custom.reports_page import reports_app
 from pages_custom.settings_page import settings_app
 from utils.auth import validate_pin, can_access_page, is_admin
 from utils.logger import log_event
+import re
+from pathlib import Path
 
 # ===========================
 # THEME ENGINE (Light/Dark Toggle)
@@ -124,6 +126,59 @@ def inject_theme():
 
 
 st.set_page_config(page_title="Newton Smart Home OS", layout="wide")
+
+
+def template_health_check():
+    """Scan `templates/` for missing expected templates and simple Jinja issues.
+
+    Detects:
+    - Missing expected template files
+    - Unbalanced '{{' vs '}}' occurrences
+    - '{{ ... }}' print blocks that contain a '%' character (likely accidental)
+    """
+    tpl_dir = Path(__file__).resolve().parents[0] / 'templates'
+    expected = [
+        'newton_invoice_A4.html',
+        'newton_quotation_A4.html',
+        'newton_receipt_A4.html',
+    ]
+    issues = []
+    if not tpl_dir.exists():
+        issues.append(f"Templates folder not found: {tpl_dir}")
+    else:
+        for name in expected:
+            if not (tpl_dir / name).exists():
+                issues.append(f"Missing template: {name}")
+
+        for p in sorted(tpl_dir.glob('*.html')):
+            try:
+                txt = p.read_text(encoding='utf-8')
+            except Exception as e:
+                issues.append(f"Cannot read {p.name}: {e}")
+                continue
+            # Unbalanced braces
+            if txt.count('{{') != txt.count('}}'):
+                issues.append(f"Unbalanced braces in {p.name}: '{{{{' x{txt.count('{{')}, '}}' x{txt.count('}}')} )")
+            # Look for suspicious percent signs inside print blocks
+            for m in re.finditer(r'\{\{\s*([^}]+?)\s*\}\}', txt):
+                inner = m.group(1)
+                if '%' in inner:
+                    issues.append(f"Suspicious token in {p.name}: '{{{{ {inner.strip()} }}}}'")
+
+    if issues:
+        # Print to console for logs
+        print("TEMPLATE HEALTH CHECK FOUND ISSUES:")
+        for it in issues:
+            print(" - ", it)
+        try:
+            # Show warnings in the Streamlit UI so users see issues early
+            st.warning("Template health check found issues. Open console for details.")
+        except Exception:
+            pass
+
+
+# Run template health check early so problems are visible on startup
+template_health_check()
 
 # ===========================
 # PIN LOGIN SYSTEM

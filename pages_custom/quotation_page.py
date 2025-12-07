@@ -600,7 +600,7 @@ def quotation_app():
             'bank_company': load_settings().get('company_name', 'Newton Smart Home'),
             'sig_name': load_settings().get('default_prepared_by', ''),
             'sig_role': load_settings().get('default_approved_by', ''),
-        })
+        }, template_name="newton_quotation_A4.html")
         return html_to_pdf(html)
 
     def _auto_download(data_bytes: bytes, filename: str, mime: str):
@@ -799,7 +799,7 @@ def quotation_app():
             'bank_company': load_settings().get('company_name', 'Newton Smart Home'),
             'sig_name': load_settings().get('default_prepared_by', ''),
             'sig_role': load_settings().get('default_approved_by', ''),
-        })
+        }, template_name="newton_quotation_A4.html")
         if st.button('Download HTML'):
             st.download_button('Download Quotation (HTML)', html_content, file_name=f"Quotation_{client_name}_{quote_no}.html", mime='text/html')
     except Exception as e:

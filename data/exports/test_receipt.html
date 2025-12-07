@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Invoice - Newton Smart Home</title>
+    <title>Receipt - Newton Smart Home</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
         :root {
@@ -30,7 +30,7 @@
             margin: 12mm 10mm;
         }
 
-        body {
+body {
             margin: 0;
             padding: 32px 16px;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -50,7 +50,6 @@
             box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18);
             padding: 30px 32px 34px;
         }
-
         .page-break {
             page-break-before: always;
         }
@@ -553,7 +552,8 @@
             </div>
             <div class="logo-wrapper">
                 <div class="logo-placeholder">
-                    <img src="" alt="Newton Smart Home Logo" style="width: 140%; height: 500%; object-fit: contain;" />
+                    <img src=""
+                        alt="Newton Smart Home Logo" style="width: 140%; height: 500%; object-fit: contain;" />
                 </div>
             </div>
         </div>
@@ -562,18 +562,18 @@
             <div class="meta-title-block">
                 <div class="badge">
                     <span class="badge-dot"></span>
-                    <span>Invoice</span>
+                    <span>Receipt</span>
                 </div>
-                <h1>Tax Invoice</h1>
+                <h1>Payment Receipt</h1>
                 <p>
-                    This invoice outlines the supply and commissioning of Newton Smart Home solutions for the
+                    This receipt confirms payment for Newton Smart Home solutions for the
                     individual client below.
                 </p>
             </div>
             <table class="meta-table">
                 <tr>
                     <td class="label">Quotation No.</td>
-                    <td class="value">QT-TEST-001</td>
+                    <td class="value"></td>
                 </tr>
                 <tr>
                     <td class="label">Date</td>
@@ -591,7 +591,7 @@
             <div class="bill-grid">
                 <div class="bill-card">
                     <div class="bill-label">Client info</div>
-                    <div class="bill-name"></div>
+                    <div class="bill-name">Preview Client</div>
                     <div class="bill-text">
                         Mobile: <br />
                         Location: <br />
@@ -621,36 +621,6 @@
                     </tr>
                 </thead>
                 <tbody>
-                    
-                    <tr>
-                        <td class="image">
-                            <div class="item-image-slot">
-                                
-                                IMAGE
-                                
-                            </div>
-                        </td>
-                        <td>Test product A</td>
-                        <td class="warranty"></td>
-                        <td class="qty">2</td>
-                        <td class="price">100</td>
-                        <td class="total">200</td>
-                    </tr>
-                    
-                    <tr>
-                        <td class="image">
-                            <div class="item-image-slot">
-                                
-                                IMAGE
-                                
-                            </div>
-                        </td>
-                        <td>Test product B</td>
-                        <td class="warranty"></td>
-                        <td class="qty">1</td>
-                        <td class="price">300</td>
-                        <td class="total">300</td>
-                    </tr>
                     
                 </tbody>
             </table>
@@ -684,35 +654,23 @@
                 </div>
                 <div class="totals-card">
                     <div class="totals-row label">
-                        <span>Sub-total</span>
-                        <span class="value">AED 500.00</span>
-                    </div>
-                    <div class="totals-row label">
-                        <span>Installation &amp; Operation</span>
-                        <span class="value">AED 0.00</span>
-                    </div>
-                    <div class="totals-row label">
-                        <span>Discount</span>
-                        <span class="value">AED 0.00</span>
-                    </div>
-                    <div class="totals-row label">
-                        <span>VAT</span>
-                        <span class="value">AED 0.00</span>
-                    </div>
-                    <div class="totals-row total">
                         <span>Total Invoice Amount</span>
-                        <span class="value">AED 500.00</span>
-                    </div>
-                    <div class="totals-row label" style="margin-top:10px;">
-                        <span>Down Payment</span>
-                        <span class="value">AED 0.00</span>
+                        <span class="value"></span>
                     </div>
                     <div class="totals-row label">
-                        <span>Previously Paid</span>
-                        <span class="value">AED 0.00</span>
+                        <span>Amount Paid</span>
+                        <span class="value"></span>
+                    </div>
+                    <div class="totals-row label">
+                        <span>Payment Method</span>
+                        <span class="value"></span>
+                    </div>
+                    <div class="totals-row label">
+                        <span>Payment Date</span>
+                        <span class="value"></span>
                     </div>
                     <div class="totals-row total">
-                        <span>Balance Due</span>
+                        <span>Remaining Balance</span>
                         <span class="value"></span>
                     </div>
                 </div>
@@ -723,98 +681,22 @@
             <div class="section">
                 <div class="section-label"></div>
                 <div class="info-grid">
-                    <div class="info-card" style="flex: 1 1 100%; border-style: solid; border-width: 1px;">
-                        <h4>General Terms &amp; Conditions</h4>
-                        <ol
-                            style="margin: 4px 0 0; padding-left: 18px; font-size: 11px; color: var(--text-muted); line-height: 1.6;">
-                            <li>
-                                <strong>General Terms</strong>
-                                <ul style="margin: 2px 0 6px 0; padding-left: 16px;">
-                                    <li>These Terms and Conditions govern the sale, installation, and servicing of smart
-                                        home automation products by NEWTEN Smart Home.</li>
-                                    <li>By engaging in a transaction with NEWTEN Smart Home, the client agrees to these
-                                        terms.</li>
-                                </ul>
-                            </li>
-                            <li>
-                                <strong>Warranty &amp; Liability</strong>
-                                <ul style="margin: 2px 0 6px 0; padding-left: 16px;">
-                                    <li>Warranty is provided for manufacturing defects only. This does not cover:
-                                        <ul style="margin: 2px 0 2px 0; padding-left: 16px;">
-                                            <li>Wear and tear, misuse, or improper maintenance.</li>
-                                            <li>External damages or influences beyond our control.</li>
-                                            <li>Any third-party modifications to hardware or software.</li>
-                                        </ul>
-                                    </li>
-                                    <li>Warranty claims must be submitted within two months of defect detection.</li>
-                                    <li>Clients are responsible for shipping costs (AED 100.00) related to warranty
-                                        claims.</li>
-                                    <li>No cash refunds are provided under any circumstances.</li>
-                                </ul>
-                            </li>
-                            <li>
-                                <strong>Payment Terms</strong>
-                                <ul style="margin: 2px 0 6px 0; padding-left: 16px;">
-                                    <li>Place Holder % (24,367.00) payment upon order confirmation.</li>
-                                    <li>Place Holder (10,443.00) payment upon testing and commissioning.</li>
-                                    <li>All payments are non-refundable.</li>
-                                </ul>
-                            </li>
-                            <li>
-                                <strong>Delivery &amp; Installation</strong>
-                                <ul style="margin: 2px 0 6px 0; padding-left: 16px;">
-                                    <li>Estimated delivery time: 7–45 days upon receipt of third payment.</li>
-                                    <li>Installation includes testing and programming but excludes:
-                                        <ul style="margin: 2px 0 2px 0; padding-left: 16px;">
-                                            <li>Power supply sources (TAQA) and related failures.</li>
-                                            <li>Any structural modifications needed for installation.</li>
-                                        </ul>
-                                    </li>
-                                </ul>
-                            </li>
-                            <li>
-                                <strong>Product Use &amp; Maintenance</strong>
-                                <ul style="margin: 2px 0 6px 0; padding-left: 16px;">
-                                    <li>Customers are responsible for ensuring proper use and maintenance of installed
-                                        systems.</li>
-                                    <li>Any misuse or mishandling voids the warranty.</li>
-                                </ul>
-                            </li>
-                            <li>
-                                <strong>Project Modifications &amp; Delays</strong>
-                                <ul style="margin: 2px 0 6px 0; padding-left: 16px;">
-                                    <li>Any request to modify project timelines (expedited services, handover date
-                                        changes, etc.) may result in additional fees.</li>
-                                    <li>NEWTEN Smart Home reserves the right to adjust pricing due to market
-                                        fluctuations, supplier changes, or product discontinuation.</li>
-                                </ul>
-                            </li>
-                            <li>
-                                <strong>Intellectual Property &amp; Media Usage</strong>
-                                <ul style="margin: 2px 0 6px 0; padding-left: 16px;">
-                                    <li>NEWTEN Smart Home reserves the right to capture and use photos/videos of
-                                        projects for promotional purposes unless explicitly prohibited by the client.
-                                    </li>
-                                    <li>Clients may not modify or reproduce any proprietary software or system
-                                        components without permission.</li>
-                                </ul>
-                            </li>
-                            <li>
-                                <strong>Force Majeure</strong>
-                                <ul style="margin: 2px 0 6px 0; padding-left: 16px;">
-                                    <li>NEWTEN Smart Home is not liable for delays or failures caused by external
-                                        factors beyond its control (natural disasters, supplier disruptions, regulatory
-                                        changes, etc.).</li>
-                                </ul>
-                            </li>
-                            <li>
-                                <strong>Dispute Resolution</strong>
-                                <ul style="margin: 2px 0 0 0; padding-left: 16px;">
-                                    <li>Any disputes will be resolved amicably; otherwise, they will be handled under
-                                        the applicable laws of the United Arab Emirates.</li>
-                                </ul>
-                            </li>
-                        </ol>
+                    <div class="info-card">
+                        <h4>Warranty</h4>
+                        <p>
+                            All Newton Smart Home equipment supplied under this quotation is covered by a
+                            standard 12-month warranty against manufacturing defects from the date of handover,
+                            provided that the system is used as intended and maintained properly.
+                        </p>
+                    </div>
+                    <div class="info-card">
+                        <h4>Payment Terms</h4>
+                        <p>
+                            Newton Smart Home is committed to clear, transparent and flexible payment arrangements.
+                            The payment schedule will be agreed with you before work starts and aligned with project
+                            milestones,
+                            so you always know what is due and when, with no hidden charges.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -823,7 +705,8 @@
                 <div class="sig-block">
                     <div class="sig-label">For Newton Smart Home</div>
                     <div class="sig-stamp">
-                        <img src="" alt="Newton Smart Home Stamp and Signature" />
+                        <img src=""
+                            alt="Newton Smart Home Stamp and Signature" />
                     </div>
                     <div class="sig-name">Authorised Signatory</div>
                     <div class="sig-role">Newton Smart Home</div>

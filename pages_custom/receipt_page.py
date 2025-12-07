@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from utils.quotation_utils import render_quotation_html
+from utils.settings import load_settings
 from docx import Document
 from io import BytesIO
 
@@ -228,6 +230,23 @@ def receipt_app():
             data=word_file,
             file_name=f"Receipt_{receipt_no}.docx"
         )
+
+        # Also offer HTML export using the receipt A4 template
+        try:
+            html_receipt = render_quotation_html({
+                'company_name': load_settings().get('company_name', 'Newton Smart Home'),
+                'receipt_number': receipt_no,
+                'receipt_date': datetime.today().strftime('%Y-%m-%d'),
+                'client_name': inv.get('client_name',''),
+                'client_phone': (format_phone_input(inv.get('phone','')) or inv.get('phone','')),
+                'client_location': inv.get('location',''),
+                'amount': payment,
+                'previous_paid': previous_paid_total,
+                'balance': remaining,
+            }, template_name='newton_receipt_A4.html')
+            st.download_button('Download Receipt (HTML)', html_receipt, file_name=f"Receipt_{receipt_no}.html", mime='text/html')
+        except Exception as e:
+            st.warning(f"Unable to prepare receipt HTML: {e}")
 
         if clicked:
             try:

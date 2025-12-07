@@ -6,6 +6,7 @@ from docx import Document
 from io import BytesIO
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
+from utils.quotation_utils import render_quotation_html
 
 
 def proper_case(text):
@@ -87,11 +88,16 @@ def invoice_app():
                 "base_id","date","type","number","amount","client_name","phone","location","note"
             ])
 
-    def save_record(rec: dict):
-        df = load_records()
-        if not df.empty and {"type", "number"}.issubset(df.columns):
-            df = df[~((df["type"] == rec.get("type")) & (df["number"] == rec.get("number")))]
-        df = pd.concat([df, pd.DataFrame([rec])], ignore_index=True)
+            for r in raw_items:
+                # Safely parse quantity from common keys
+                qty = 0.0
+                for k in ('Qty', 'qty', 'Quantity'):
+                    try:
+                        if k in r and r.get(k) is not None and str(r.get(k)).strip() != '':
+                            qty = float(r.get(k))
+                            break
+                    except Exception:
+                        continue
         if {"type", "number"}.issubset(df.columns):
             df = df.drop_duplicates(subset=["type", "number"], keep="last")
         df.to_excel("data/records.xlsx", index=False)
@@ -365,6 +371,16 @@ def invoice_app():
         warranty = st.number_input("Warranty (Years)", min_value=0, value=st.session_state.get("war_inv", int(row["Warranty"])), step=1, label_visibility="collapsed", key="war_inv")
     with e[5]:
         if st.button("✅", key="add_inv_btn"):
+            # Attempt to attach image info from catalog
+            image_val = None
+            try:
+                if 'ImagePath' in catalog.columns and not pd.isna(row.get('ImagePath')):
+                    image_val = str(row.get('ImagePath'))
+                elif 'ImageBase64' in catalog.columns and not pd.isna(row.get('ImageBase64')):
+                    image_val = str(row.get('ImageBase64'))
+            except Exception:
+                image_val = None
+
             new_item = {
                 "Item No": len(st.session_state.invoice_table) + 1,
                 "Product / Device": product,
@@ -373,6 +389,9 @@ def invoice_app():
                 "Unit Price (AED)": price,
                 "Line Total (AED)": line_total,
                 "Warranty (Years)": warranty,
+                "ImagePath": row.get('ImagePath') if 'ImagePath' in row.index else None,
+                "ImageBase64": row.get('ImageBase64') if 'ImageBase64' in row.index else None,
+                "image": image_val,
             }
             st.session_state.invoice_table = pd.concat([st.session_state.invoice_table, pd.DataFrame([new_item])], ignore_index=True)
             st.rerun()
@@ -487,6 +506,60 @@ def invoice_app():
             file_name=f"Invoice_{invoice_no}.docx"
         )
 
+        # Also provide HTML download using the A4 invoice template
+        try:
+            # Prepare normalized items for the renderer
+            raw_items = st.session_state.invoice_table.to_dict('records') if 'invoice_table' in st.session_state else []
+            norm_items = []
+            for r in raw_items:
+                try:
+                    qty_val = r.get('Qty')
+                    if qty_val is None or qty_val == '':
+                        qty = 0.0
+                    else:
+                        qty = float(qty_val)
+                except Exception:
+                    qty = 0.0
+                try:
+                    unit_price = float(r.get('Unit Price (AED)') or r.get('Unit Price') or r.get('unit_price') or 0)
+                except Exception:
+                    unit_price = 0.0
+                try:
+                    total = float(r.get('Line Total (AED)') or r.get('total') or qty * unit_price)
+                except Exception:
+                    total = qty * unit_price
+                item = {
+                    'description': r.get('Description') or r.get('Product / Device') or r.get('Product') or r.get('Device') or '',
+                    'qty': qty,
+                    'unit_price': unit_price,
+                    'total': total,
+                    'warranty': r.get('Warranty (Years)') or r.get('Warranty') or r.get('war_inv') or '',
+                    'ImagePath': r.get('ImagePath') if 'ImagePath' in r else None,
+                    'ImageBase64': r.get('ImageBase64') if 'ImageBase64' in r else None,
+                    'image': r.get('image') if 'image' in r else (r.get('ImagePath') if 'ImagePath' in r else (r.get('ImageBase64') if 'ImageBase64' in r else None)),
+                }
+                norm_items.append(item)
+
+            html_invoice = render_quotation_html({
+                'company_name': load_settings().get('company_name', 'Newton Smart Home'),
+                'quotation_number': invoice_no,
+                'quotation_date': datetime.today().strftime('%Y-%m-%d'),
+                'client_name': client_name,
+                'client_address': client_location,
+                'items': norm_items,
+                'subtotal': product_total,
+                'Installation': installation_cost,
+                'total_amount': grand_total,
+                'bank_name': load_settings().get('bank_name', ''),
+                'bank_account': load_settings().get('bank_account', ''),
+                'bank_iban': load_settings().get('bank_iban', ''),
+                'sig_name': load_settings().get('default_prepared_by', ''),
+                'sig_role': load_settings().get('default_approved_by', ''),
+            }, template_name='newton_invoice_A4.html')
+            st.download_button('Download Invoice (HTML)', html_invoice, file_name=f"Invoice_{invoice_no}.html", mime='text/html')
+        except Exception as e:
+            st.error(f"Unable to prepare invoice HTML: {e}")
+
         if clicked:
             # Determine base_id linkage
             base_id = None
@@ -499,7 +572,7 @@ def invoice_app():
             if not base_id:
                 # Generate a new base id for standalone invoices
                 today_id = datetime.today().strftime('%Y%m%d')
-                same_day = records[records.get("base_id", "").astype(str).str.contains(today_id, na=False)] if not records.empty else pd.DataFrame()
+                same_day = records[records["base_id"].astype(str).str.contains(today_id, na=False)] if not records.empty else pd.DataFrame()
                 seq = len(same_day) + 1
                 base_id = f"{today_id}-{str(seq).zfill(3)}"
 
@@ -522,3 +595,24 @@ def invoice_app():
                 st.warning(f"⚠️ Downloaded, but failed to save record: {e}")
     except Exception as e:
         st.error(f"❌ Unable to generate Word file: {e}")
+
+def load_settings():
+    try:
+        df = pd.read_excel("data/settings.xlsx")
+        settings = dict(zip(df["key"], df["value"]))
+        return settings
+    except Exception:
+        return {}
+
+    def save_record(record: dict):
+        os.makedirs("data", exist_ok=True)
+        path = "data/records.xlsx"
+        try:
+            df = pd.read_excel(path)
+            df.columns = [c.strip().lower() for c in df.columns]
+        except Exception:
+            df = pd.DataFrame(columns=[
+                "base_id","date","type","number","amount","client_name","phone","location","note"
+            ])
+        df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
+        df.to_excel(path, index=False)
