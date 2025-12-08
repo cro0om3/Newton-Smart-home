@@ -271,7 +271,10 @@ def receipt_app():
                 'previous_paid': previous_paid_total,
                 'balance': remaining,
             }, template_name='newton_receipt_A4.html')
-            st.download_button('Download Receipt (HTML)', html_receipt, file_name=f"Receipt_{receipt_no}.html", mime='text/html')
+            try:
+                st.download_button('Download Receipt (HTML)', html_receipt, file_name=f"Receipt_{receipt_no}.html", mime='text/html')
+            except Exception:
+                st.download_button('Download Receipt (HTML)', html_receipt, file_name=f"Receipt_{receipt_no}.html", mime='text/html')
         except Exception as e:
             st.warning(f"Unable to prepare receipt HTML: {e}")
 

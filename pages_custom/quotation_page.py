@@ -5,10 +5,17 @@ import os
 from io import BytesIO
 import base64
 import tempfile
+from docx import Document
+from docx.shared import Pt, Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from streamlit.components.v1 import html as st_html
 from utils.quotation_utils import render_quotation_html, html_to_pdf
 from pathlib import Path
 import sys
+import threading
+import json
+import subprocess
+import time
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from utils.logger import log_event
 from utils.settings import load_settings
@@ -275,80 +282,121 @@ def quotation_app():
                 if try_phone:
                     m2 = cdf_phone.apply(norm) == norm(try_phone)
                     if m2.any():
-                        exists = cdf[m2].index[0]
-        if exists is None:
-            new_row = {
-                "client_name": proper_case(name),
-                "phone": phone,
-                "location": proper_case(location),
-                "email": "",
-                "status": "New",
-                "notes": "",
-                "tags": "",
-                "next_follow_up": "",
-                "assigned_to": "",
-                "last_activity": datetime.today().strftime('%Y-%m-%d'),
-            }
-            cdf = pd.concat([cdf, pd.DataFrame([new_row])], ignore_index=True)
-        else:
-            # Update phone/location/last_activity for existing
-            cdf.loc[exists, "client_name"] = proper_case(name)
-            cdf.loc[exists, "phone"] = phone or cdf.loc[exists, "phone"]
-            cdf.loc[exists, "location"] = proper_case(location) or cdf.loc[exists, "location"]
-            # Quotation marks engagement start; keep status if set
-            cdf.loc[exists, "status"] = cdf.loc[exists, "status"] or "New"
-            cdf.loc[exists, "last_activity"] = datetime.today().strftime('%Y-%m-%d')
-        save_customers(cdf)
+                        try:
+                            # Inline buttons: HTML download + Headless PDF (same line)
+                            col_html, col_pdf = st.columns([1,1])
+                            html_path = None
 
-    if "product_table" not in st.session_state:
-        st.session_state.product_table = pd.DataFrame(columns=[
-            "Item No","Product / Device","Description",
-            "Qty","Unit Price (AED)","Line Total (AED)","Warranty (Years)"
-        ])
+                            def _run_converter_background(html_path_str: str, status_path_str: str, vw: str | None = None, vh: str | None = None):
+                                """Background worker to run the converter and write status JSON."""
+                                status = {"status": "running", "started_at": time.time()}
+                                try:
+                                    Path(status_path_str).write_text(json.dumps(status), encoding='utf-8')
+                                    script = Path(__file__).resolve().parents[1] / 'scripts' / 'convert_with_playwright.py'
+                                    cmd = [sys.executable, str(script), html_path_str]
+                                    if vw and vh:
+                                        cmd.extend([str(int(vw)), str(int(vh))])
+                                    proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                                    # On success, determine pdf path
+                                    html_p = Path(html_path_str)
+                                    pdf_p = html_p.with_suffix('.pdf')
+                                    if pdf_p.exists():
+                                        status.update({"status": "done", "pdf": str(pdf_p), "finished_at": time.time()})
+                                    else:
+                                        status.update({"status": "error", "error": "PDF not found after conversion", "finished_at": time.time()})
+                                except Exception as exc:
+                                    status.update({"status": "error", "error": str(exc), "finished_at": time.time()})
+                                try:
+                                    Path(status_path_str).write_text(json.dumps(status), encoding='utf-8')
+                                except Exception:
+                                    pass
 
-    # =========================
-    # CLIENT DETAILS
-    # =========================
-    st.markdown('<div class="section-title">Quotation Summary</div>', unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
+                            if col_pdf.button('Export PDF (Headless)'):
+                                # Ensure HTML is prepared
+                                html_path = None
+                                try:
+                                    html_content = render_quotation_html({
+                                        'company_name': load_settings().get('company_name', 'Newton Smart Home'),
+                                        'quotation_number': quote_no,
+                                        'quotation_date': datetime.today().strftime('%Y-%m-%d'),
+                                        'valid_until': '',
+                                        'status': 'Pending Approval',
+                                        'client_name': client_name,
+                                        'client_company': '',
+                                        'client_address': client_location,
+                                        'client_city': '',
+                                        'client_trn': '',
+                                        'project_title': '',
+                                        'project_location': client_location,
+                                        'project_scope': '',
+                                        'project_notes': '',
+                                        'items': st.session_state.product_table.to_dict('records') if 'product_table' in st.session_state else [],
+                                        'subtotal': product_total,
+                                        'Installation': float(st.session_state.get('install_cost_quo_value', 0.0) or 0.0),
+                                        'vat_amount': 0,
+                                        'total_amount': grand_total,
+                                        'bank_name': load_settings().get('bank_name', ''),
+                                        'bank_account': load_settings().get('bank_account', ''),
+                                        'bank_iban': load_settings().get('bank_iban', ''),
+                                        'bank_company': load_settings().get('company_name', 'Newton Smart Home'),
+                                        'sig_name': load_settings().get('default_prepared_by', ''),
+                                        'sig_role': load_settings().get('default_approved_by', ''),
+                                    }, template_name="newton_quotation_A4.html")
+                                    out_dir = Path('data') / 'exports'
+                                    out_dir.mkdir(parents=True, exist_ok=True)
+                                    html_path = out_dir / f"Quotation_{client_name}_{quote_no}.html"
+                                    with open(html_path, 'w', encoding='utf-8') as fh:
+                                        fh.write(html_content)
+                                except Exception as _e:
+                                    st.error(f"Failed to prepare HTML for headless export: {_e}")
 
-    with c1:
-        raw_name = st.text_input("Client Name", placeholder="Ahmed Omer", key="quo_client_name")
-        client_name = proper_case(raw_name)
+                                # Start background thread that runs converter and writes a status file next to HTML
+                                if html_path:
+                                    status_path = html_path.with_suffix('.status.json')
+                                    # Remove any previous status
+                                    try:
+                                        if status_path.exists():
+                                            status_path.unlink()
+                                    except Exception:
+                                        pass
+                                    vw = os.environ.get('PLAYWRIGHT_PDF_WIDTH')
+                                    vh = os.environ.get('PLAYWRIGHT_PDF_HEIGHT')
+                                    t = threading.Thread(target=_run_converter_background, args=(str(html_path), str(status_path), vw, vh), daemon=True)
+                                    t.start()
+                                    st.success('Headless conversion started in background. Click "Refresh status" to update.')
 
-        location_selected = st.selectbox("Project Location (UAE)", uae_locations, key="quo_loc")
-        client_location = proper_case(location_selected)
-
-        phone_raw = st.text_input("Mobile Number", placeholder="050xxxxxxx", key="quo_phone")
-        client_phone = format_phone_input(phone_raw)
-        if client_phone:
-            st.success(f" {client_phone}")
-
-    with c2:
-        today = datetime.today().strftime('%Y%m%d')
-        auto_quote = f"QUO-{today}-{len(st.session_state.product_table)+1:03d}"
-        quote_no = st.text_input("Quotation No", value=auto_quote, key="quo_no")
-
-        prepared_by = proper_case(st.text_input("Prepared By", value="Mr Bukhari", key="quo_prepared"))
-        approved_by = proper_case(st.text_input("Approved By", value="Mr Mohammed", key="quo_approved"))
-
-    # =========================
-    # PRODUCTS
-    # =========================
-    st.markdown("---")
-    st.markdown('<div class="section-title">Add Product</div>', unsafe_allow_html=True)
-
-    # Header row
-    st.markdown("""
-    <div class="product-header">
-        <span>Product / Device</span>
-        <span>Qty</span>
-        <span>Unit Price</span>
-        <span>Line Total</span>
-        <span>Warranty</span>
-        <span>Action</span>
-    </div>
-    """, unsafe_allow_html=True)
+                            # Status area and refresh
+                            try:
+                                # Look for any recent status file for the current quotation
+                                out_dir = Path('data') / 'exports'
+                                expected_html = out_dir / f"Quotation_{client_name}_{quote_no}.html"
+                                status_file = expected_html.with_suffix('.status.json')
+                                if status_file.exists():
+                                    try:
+                                        s = json.loads(status_file.read_text(encoding='utf-8'))
+                                    except Exception:
+                                        s = {'status': 'unknown'}
+                                    if s.get('status') == 'running':
+                                        st.info('Conversion status: running')
+                                        if st.button('Refresh status'):
+                                            st.experimental_rerun()
+                                    elif s.get('status') == 'done':
+                                        pdf_path = Path(s.get('pdf')) if s.get('pdf') else expected_html.with_suffix('.pdf')
+                                        if pdf_path.exists():
+                                            with open(pdf_path, 'rb') as pf:
+                                                pdf_bytes = pf.read()
+                                            st.success('Conversion finished. Download below:')
+                                            st.download_button('Download Headless PDF', pdf_bytes, file_name=pdf_path.name, mime='application/pdf')
+                                        else:
+                                            st.warning('Conversion reported done but PDF file missing.')
+                                    elif s.get('status') == 'error':
+                                        st.error(f"Conversion failed: {s.get('error')}")
+                                        if st.button('Refresh status'):
+                                            st.experimental_rerun()
+                            except Exception:
+                                pass
+                        except Exception as e:
+                            st.error(f'Export (headless) unavailable: {e}')
 
     st.session_state.num_entries = 1
 
@@ -457,13 +505,15 @@ def quotation_app():
 
         with cols[5]:
             if st.button("✅", key=f"add_row_{entry_idx}"):
-                # attempt to attach image info from catalog (ImagePath or ImageBase64)
+                # attempt to attach image info from catalog (prefer Base64)
                 image_val = None
                 try:
-                    if 'ImagePath' in catalog.columns and not pd.isna(row.get('ImagePath')):
-                        image_val = str(row.get('ImagePath'))
-                    elif 'ImageBase64' in catalog.columns and not pd.isna(row.get('ImageBase64')):
-                        image_val = str(row.get('ImageBase64'))
+                    if 'ImageBase64' in catalog.columns and not pd.isna(row.get('ImageBase64')):
+                        raw_b64 = str(row.get('ImageBase64')).strip()
+                        if raw_b64:
+                            image_val = raw_b64 if raw_b64.startswith('data:') else f"data:image/png;base64,{raw_b64}"
+                    if image_val is None and 'ImagePath' in catalog.columns and not pd.isna(row.get('ImagePath')):
+                        image_val = str(row.get('ImagePath')).strip()
                 except Exception:
                     image_val = None
 
@@ -981,6 +1031,79 @@ def quotation_app():
         except Exception as e:
             st.error(f"❌ Unable to prepare PDF: {e}")
 
+    # Headless export using Playwright (Chromium) - separate button
+    try:
+        # Inline buttons: HTML download + Headless PDF (same line)
+        col_html, col_pdf = st.columns([1,1])
+        html_path = None
+        if col_pdf.button('Export PDF (Headless)'):
+            # Ensure HTML is prepared
+            html_path = None
+            try:
+                html_content = render_quotation_html({
+                    'company_name': load_settings().get('company_name', 'Newton Smart Home'),
+                    'quotation_number': quote_no,
+                    'quotation_date': datetime.today().strftime('%Y-%m-%d'),
+                    'valid_until': '',
+                    'status': 'Pending Approval',
+                    'client_name': client_name,
+                    'client_company': '',
+                    'client_address': client_location,
+                    'client_city': '',
+                    'client_trn': '',
+                    'project_title': '',
+                    'project_location': client_location,
+                    'project_scope': '',
+                    'project_notes': '',
+                    'items': st.session_state.product_table.to_dict('records') if 'product_table' in st.session_state else [],
+                    'subtotal': product_total,
+                    'Installation': float(st.session_state.get('install_cost_quo_value', 0.0) or 0.0),
+                    'vat_amount': 0,
+                    'total_amount': grand_total,
+                    'bank_name': load_settings().get('bank_name', ''),
+                    'bank_account': load_settings().get('bank_account', ''),
+                    'bank_iban': load_settings().get('bank_iban', ''),
+                    'bank_company': load_settings().get('company_name', 'Newton Smart Home'),
+                    'sig_name': load_settings().get('default_prepared_by', ''),
+                    'sig_role': load_settings().get('default_approved_by', ''),
+                }, template_name="newton_quotation_A4.html")
+                out_dir = Path('data') / 'exports'
+                out_dir.mkdir(parents=True, exist_ok=True)
+                html_path = out_dir / f"Quotation_{client_name}_{quote_no}.html"
+                with open(html_path, 'w', encoding='utf-8') as fh:
+                    fh.write(html_content)
+            except Exception as _e:
+                st.error(f"Failed to prepare HTML for headless export: {_e}")
+
+            # Call the playwright converter script which will produce a PDF in data/exports
+            if html_path and html_path.exists():
+                import subprocess
+                script = Path(__file__).resolve().parents[1] / 'scripts' / 'convert_with_playwright.py'
+                try:
+                    # Pass the html_path as argument to the converter
+                    cmd = [sys.executable, str(script), str(html_path)]
+                    proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                    st.success('Headless export completed')
+                except Exception as e:
+                    st.error(f'Headless export failed: {e} - {getattr(e, "stdout", "")}')
+                    proc = None
+
+                # Try to locate output PDF (consistent with converter naming)
+                # Converter names outputs after the input file stem
+                pdf_path = out_dir / f"{html_path.stem}.pdf"
+                if pdf_path.exists():
+                    with open(pdf_path, 'rb') as pf:
+                        pdf_bytes = pf.read()
+                        try:
+                            col_pdf.download_button('Download Headless PDF', pdf_bytes, file_name=pdf_path.name, mime='application/pdf')
+                        except Exception:
+                            # If download_button fails for any reason, show a minimal info message
+                            st.info('PDF ready for download.')
+                else:
+                    st.error('Headless export completed but PDF not found')
+    except Exception as e:
+        st.error(f'Export (headless) unavailable: {e}')
+
     # Provide Download HTML button (separate row)
     try:
         html_content = render_quotation_html({
@@ -1010,8 +1133,9 @@ def quotation_app():
             'sig_name': load_settings().get('default_prepared_by', ''),
             'sig_role': load_settings().get('default_approved_by', ''),
         }, template_name="newton_quotation_A4.html")
-        if st.button('Download HTML'):
-            st.download_button('Download Quotation (HTML)', html_content, file_name=f"Quotation_{client_name}_{quote_no}.html", mime='text/html')
+        # Render HTML now and show inline Download HTML button
+        if col_html.button('Download HTML'):
+            col_html.download_button('Download Quotation (HTML)', html_content, file_name=f"Quotation_{client_name}_{quote_no}.html", mime='text/html')
     except Exception as e:
         st.error(f"❌ Unable to prepare HTML: {e}")
 

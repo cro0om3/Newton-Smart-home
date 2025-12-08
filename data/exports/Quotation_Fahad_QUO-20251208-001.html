@@ -631,15 +631,15 @@
             <table class="meta-table">
                 <tr>
                     <td class="label">Quotation No.</td>
-                    <td class="value">{{ quotation_number }}</td>
+                    <td class="value">QUO-20251208-001</td>
                 </tr>
                 <tr>
                     <td class="label">Date</td>
-                    <td class="value">{{ quotation_date }}</td>
+                    <td class="value">2025-12-08</td>
                 </tr>
                 <tr>
                     <td class="label">Valid Until</td>
-                    <td class="value">{{ valid_until }}</td>
+                    <td class="value"></td>
                 </tr>
                 <tr>
                     <td class="label">Status</td>
@@ -653,17 +653,17 @@
             <div class="bill-grid">
                 <div class="bill-card">
                     <div class="bill-label">Client info</div>
-                    <div class="bill-name">{{ client_name }}</div>
+                    <div class="bill-name">Fahad</div>
                     <div class="bill-text">
-                        Mobile: {{ mobile }}<br />
-                        Location: {{ project_location }}<br />
+                        Mobile: <br />
+                        Location: Abu Dhabi - Al Shamkha<br />
                     </div>
                 </div>
                 <div class="bill-card">
                     <div class="bill-label">Project Details</div>
                     <div class="bill-name">Project Title</div>
                     <div class="bill-text">
-                        {{ project_scope }}.
+                        .
                     </div>
                 </div>
             </div>
@@ -683,24 +683,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in items %}
-                    <tr>
-                        <td class="image">
-                            <div class="item-image-slot">
-                                {% if item.image %}
-                                <img src="{{ item.image }}" alt="{{ item.description }}" />
-                                {% else %}
-                                IMAGE
-                                {% endif %}
-                            </div>
-                        </td>
-                        <td>{{ item.description }}</td>
-                        <td class="warranty">{{ item.warranty }}</td>
-                        <td class="qty">{{ item.qty }}</td>
-                        <td class="price">{{ item.unit_price }}</td>
-                        <td class="total">{{ item.total }}</td>
-                    </tr>
-                    {% endfor %}
+                    
                 </tbody>
             </table>
             <div class="totals-area">
@@ -734,15 +717,15 @@
                 <div class="totals-card">
                     <div class="totals-row label">
                         <span>Sub-total</span>
-                        <span class="value">{{ subtotal | currency }}</span>
+                        <span class="value">AED 0.00</span>
                     </div>
                     <div class="totals-row label">
                         <span>Installation & Operation </span>
-                        <span class="value">{{ (Installation | default(0)) | currency }}</span>
+                        <span class="value">AED 0.00</span>
                     </div>
                     <div class="totals-row total">
                         <span>Total Amount</span>
-                        <span class="value">{{ total_amount | currency }}</span>
+                        <span class="value">AED 0.00</span>
                     </div>
                 </div>
             </div>

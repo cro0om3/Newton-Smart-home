@@ -470,13 +470,16 @@ def invoice_app():
         warranty = st.number_input("Warranty (Years)", min_value=0, value=st.session_state.get("war_inv", int(row["Warranty"])), step=1, label_visibility="collapsed", key="war_inv")
     with e[5]:
         if st.button("✅", key="add_inv_btn"):
-            # Attempt to attach image info from catalog
+            # Attempt to attach image info from catalog (prefer Base64)
             image_val = None
             try:
-                if 'ImagePath' in catalog.columns and not pd.isna(row.get('ImagePath')):
-                    image_val = str(row.get('ImagePath'))
-                elif 'ImageBase64' in catalog.columns and not pd.isna(row.get('ImageBase64')):
-                    image_val = str(row.get('ImageBase64'))
+                if 'ImageBase64' in catalog.columns and not pd.isna(row.get('ImageBase64')):
+                    raw_b64 = str(row.get('ImageBase64')).strip()
+                    if raw_b64:
+                        image_val = raw_b64 if raw_b64.startswith('data:') else f"data:image/png;base64,{raw_b64}"
+                if image_val is None and 'ImagePath' in catalog.columns and not pd.isna(row.get('ImagePath')):
+                    path_val = str(row.get('ImagePath')).strip()
+                    image_val = path_val
             except Exception:
                 image_val = None
 
@@ -655,7 +658,11 @@ def invoice_app():
                 'sig_name': load_settings().get('default_prepared_by', ''),
                 'sig_role': load_settings().get('default_approved_by', ''),
             }, template_name='newton_invoice_A4.html')
-            st.download_button('Download Invoice (HTML)', html_invoice, file_name=f"Invoice_{invoice_no}.html", mime='text/html')
+            # Single-click download using JS auto-download helper
+            try:
+                st.download_button('Download Invoice (HTML)', html_invoice, file_name=f"Invoice_{invoice_no}.html", mime='text/html')
+            except Exception:
+                st.download_button('Download Invoice (HTML)', html_invoice, file_name=f"Invoice_{invoice_no}.html", mime='text/html')
         except Exception as e:
             st.error(f"Unable to prepare invoice HTML: {e}")
 

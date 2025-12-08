@@ -75,8 +75,20 @@ def render_quotation_html(context: Dict[str, Any], template_name: str = "newton_
                     total = 0
             # warranty mapping
             warranty = it.get('warranty') or it.get('Warranty') or it.get('Warranty (Years)') or ''
-            # image mapping (can be URL or data URI)
+            # image mapping (prefers explicit field, then Base64/path fallbacks)
             image = it.get('image') or it.get('Image') or it.get('image_url') or it.get('img') or None
+            if not image:
+                b64_fallback = it.get('ImageBase64') or it.get('image_base64')
+                if isinstance(b64_fallback, str) and b64_fallback.strip():
+                    cleaned_b64 = b64_fallback.strip()
+                    if cleaned_b64.startswith('data:'):
+                        image = cleaned_b64
+                    else:
+                        image = f"data:image/png;base64,{cleaned_b64}"
+            if not image:
+                path_fallback = it.get('ImagePath') or it.get('image_path')
+                if isinstance(path_fallback, str) and path_fallback.strip():
+                    image = path_fallback.strip()
 
             # Normalize image to a data URI when possible:
             # - If it's already a data: URI or an http(s) URL, leave as-is
@@ -176,14 +188,40 @@ def html_to_pdf(html_str: str, output_path: str | None = None) -> bytes:
                 pass
             return data
     except Exception:
-        # Fallback: try ConvertAPI if the caller has set CONVERTAPI_SECRET env var
+        # Fallback #1: Try a local Playwright headless-converter script (chromium)
+        try:
+            # Write temporary HTML file
+            with tempfile.TemporaryDirectory() as tmpdir:
+                html_path = Path(tmpdir) / "tmp_quotation.html"
+                with open(html_path, 'w', encoding='utf-8') as f:
+                    f.write(html_str)
+                # Run the repository's convert_with_playwright.py script if available
+                script = Path(__file__).resolve().parents[1] / 'scripts' / 'convert_with_playwright.py'
+                if script.exists():
+                    # Use same pixel sizes as template if provided via env, else don't pass sizes
+                    vw = os.environ.get('PLAYWRIGHT_PDF_WIDTH')
+                    vh = os.environ.get('PLAYWRIGHT_PDF_HEIGHT')
+                    cmd = [sys.executable, str(script), str(html_path)]
+                    if vw and vh:
+                        cmd.extend([str(int(vw)), str(int(vh))])
+                    import subprocess
+                    subprocess.run(cmd, check=True)
+                    out_pdf = html_path.parent / f"{html_path.stem}.pdf"
+                    if out_pdf.exists():
+                        pdf_bytes = out_pdf.read_bytes()
+                        if output_path:
+                            with open(output_path, 'wb') as f:
+                                f.write(pdf_bytes)
+                        return pdf_bytes
+        except Exception:
+            # If Playwright fallback fails, continue to next fallback
+            pass
+
+        # Fallback #2: ConvertAPI (only if user has explicitly set CONVERTAPI_SECRET)
         import os
         key = os.environ.get("CONVERTAPI_SECRET")
         if not key:
-            raise RuntimeError(
-                "No local HTML->PDF converter available and CONVERTAPI_SECRET is not set.\n"
-                "Install WeasyPrint locally OR set the environment variable CONVERTAPI_SECRET to use ConvertAPI as fallback."
-            )
+            raise RuntimeError("PDF conversion is unavailable.")
         try:
             import convertapi
             convertapi.api_credentials = key
@@ -211,4 +249,4 @@ def html_to_pdf(html_str: str, output_path: str | None = None) -> bytes:
                         f.write(pdf_bytes)
                 return pdf_bytes
         except Exception as e:
-            raise RuntimeError("Failed to convert HTML to PDF (weasyprint missing and ConvertAPI fallback failed).") from e
+            raise RuntimeError("Failed to convert HTML to PDF (weasyprint missing and all fallbacks failed).") from e
