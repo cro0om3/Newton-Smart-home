@@ -2,6 +2,10 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+try:
+    from utils import db as _db
+except Exception:
+    _db = None
 
 # Apple-style icon grid for dashboard header
 def _app_icon_grid():
@@ -15,10 +19,10 @@ def _apply_dashboard_theme():
         """
         <style>
         :root {
-            --dash-blue:#0a84ff;
+            --dash-blue:var(--accent-blue);
             --dash-blue-soft:#5ac8fa;
-            --dash-ink:#1d1d1f;
-            --dash-sub:#6e6e73;
+            --dash-ink:var(--text-main);
+            --dash-sub:var(--text-muted);
         }
         #dashboard-icons .row {
             display: grid;
@@ -57,11 +61,11 @@ def _apply_dashboard_theme():
             font-family:"SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             font-size:24px; font-weight:500; letter-spacing:.012em;
             margin: 18px 0 18px;
-            color:#6e6e73;
+            color:var(--text-muted);
         }
         .stTable th {
             background: #0a1a3c !important;
-            color: #fff !important;
+            color: var(--text-main) !important;
             text-align: center !important;
             font-size: 17px !important;
             font-weight: 500 !important;
@@ -82,8 +86,8 @@ def _metric(title, value, subtitle=None):
     st.markdown(
         f"""
         <div class="hero" style="background:#0a1a3c;border-radius:18px;padding:18px 32px;box-shadow:0 2px 16px 0 rgba(10,132,255,0.12);display:flex;flex-direction:column;align-items:center;margin-bottom:18px;">
-            <div style="font-size:28px;font-weight:700;color:#fff;">{value}</div>
-            <div style="font-size:18px;font-weight:500;color:#fff;">{title}</div>
+            <div style="font-size:28px;font-weight:700;color:var(--text-main);">{value}</div>
+            <div style="font-size:18px;font-weight:500;color:var(--text-main);">{title}</div>
             <div style="font-size:15px;color:#5ac8fa;">{subtitle if subtitle else ""}</div>
         </div>
         """,
@@ -95,12 +99,42 @@ def dashboard_new_app():
     _app_icon_grid()
     # ربط البيانات مع Excel
     def _load_or_empty(path, columns):
-        try:
-            df = pd.read_excel(path)
-            df.columns = [c.strip().lower() for c in df.columns]
-        except Exception:
-            df = pd.DataFrame(columns=columns)
-        return df
+        df = None
+        if _db is not None:
+            try:
+                if path.endswith("records.xlsx"):
+                    rows = _db.db_query(
+                        "SELECT base_id, date, type, number, amount, client_name, phone, location, note FROM records ORDER BY date"
+                    )
+                    if rows:
+                        df = pd.DataFrame(rows)
+                        df.columns = [c.strip().lower() for c in df.columns]
+                        if "date" in df.columns:
+                            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                        if "type" in df.columns:
+                            df["type"] = df["type"].astype(str).str.lower()
+                        if "amount" in df.columns:
+                            df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
+                elif path.endswith("customers.xlsx"):
+                    rows = _db.db_query(
+                        "SELECT name, phone, email, address FROM customers ORDER BY id"
+                    )
+                    if rows:
+                        df = pd.DataFrame(rows)
+                        df = df.rename(columns={"name": "client_name", "address": "location"})
+                        df.columns = [c.strip().lower() for c in df.columns]
+            except Exception:
+                df = None
+        if df is None:
+            try:
+                df = pd.read_excel(path)
+                df.columns = [c.strip().lower() for c in df.columns]
+            except Exception:
+                df = pd.DataFrame(columns=columns)
+        for col in columns:
+            if col not in df.columns:
+                df[col] = None
+        return df[columns]
 
     records = _load_or_empty(
         "data/records.xlsx",

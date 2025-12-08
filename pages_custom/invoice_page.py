@@ -7,6 +7,10 @@ from io import BytesIO
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 from utils.quotation_utils import render_quotation_html
+try:
+    from utils import db as _db
+except Exception:
+    _db = None
 
 
 def proper_case(text):
@@ -71,14 +75,34 @@ def invoice_app():
         # (Header hero removed by request)
 
     # ---------------- LOAD DATA ----------------
-    try:
-        catalog = pd.read_excel("data/products.xlsx")
-    except:
-        st.error("❌ Cannot load products.xlsx")
-        return
+    # Load product catalog (DB-first, fallback to Excel)
+    catalog = None
+    if _db is not None:
+        try:
+            rows = _db.db_query('SELECT device as "Device", description as "Description", unit_price as "UnitPrice", warranty as "Warranty", image_base64 as "ImageBase64", image_path as "ImagePath" FROM products ORDER BY id')
+            if rows:
+                catalog = pd.DataFrame(rows)
+        except Exception:
+            catalog = None
+    if catalog is None:
+        try:
+            catalog = pd.read_excel("data/products.xlsx")
+        except Exception:
+            st.error("❌ Cannot load products.xlsx")
+            return
 
     # simple records list for quotations to pick from
     def load_records():
+        # Try DB first then Excel
+        if _db is not None:
+            try:
+                rows = _db.db_query('SELECT base_id, date, type, number, amount, client_name, phone, location, note FROM records ORDER BY date')
+                if rows:
+                    df = pd.DataFrame(rows)
+                    df.columns = [c.strip().lower() for c in df.columns]
+                    return df
+            except Exception:
+                pass
         try:
             df = pd.read_excel("data/records.xlsx")
             df.columns = [c.strip().lower() for c in df.columns]
@@ -114,6 +138,17 @@ def invoice_app():
             pd.DataFrame(columns=cols).to_excel(path, index=False)
 
     def load_customers():
+        # Try DB then Excel
+        if _db is not None:
+            try:
+                rows = _db.db_query('SELECT id, name, phone, email, address FROM customers ORDER BY id')
+                if rows:
+                    df = pd.DataFrame(rows)
+                    df = df.rename(columns={'name':'client_name','address':'location'})
+                    df.columns = [c.strip().lower() for c in df.columns]
+                    return df
+            except Exception:
+                pass
         ensure_customers_file()
         try:
             df = pd.read_excel("data/customers.xlsx")
@@ -127,6 +162,31 @@ def invoice_app():
 
     def save_customers(df: pd.DataFrame):
         os.makedirs("data", exist_ok=True)
+        if _db is not None:
+            try:
+                for _, row in df.iterrows():
+                    name = str(row.get('client_name') or '')
+                    phone = row.get('phone')
+                    email = row.get('email')
+                    address = row.get('location')
+                    try:
+                        existing = _db.db_query('SELECT id FROM customers WHERE name = %s AND phone = %s', (name, phone))
+                    except Exception:
+                        existing = []
+                    if existing:
+                        try:
+                            _db.db_execute('UPDATE customers SET email = %s, address = %s WHERE id = %s', (email, address, existing[0].get('id')))
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            _db.db_execute('INSERT INTO customers(name, phone, email, address) VALUES (%s,%s,%s,%s)', (name, phone, email, address))
+                        except Exception:
+                            pass
+                df.to_excel("data/customers.xlsx", index=False)
+                return
+            except Exception:
+                pass
         df.to_excel("data/customers.xlsx", index=False)
 
     def _norm_phone(x: str):
@@ -142,6 +202,28 @@ def invoice_app():
     def upsert_customer_from_invoice(name: str, phone: str, location: str):
         if not str(name).strip():
             return
+        # Try DB upsert first, fallback to Excel
+        if _db is not None:
+            try:
+                existing = []
+                try:
+                    existing = _db.db_query('SELECT id FROM customers WHERE name = %s OR phone = %s', (proper_case(name), phone))
+                except Exception:
+                    existing = []
+                if existing:
+                    try:
+                        _db.db_execute('UPDATE customers SET phone = %s, address = %s WHERE id = %s', (phone, proper_case(location), existing[0].get('id')))
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        _db.db_execute('INSERT INTO customers(name, phone, email, address) VALUES (%s,%s,%s,%s)', (proper_case(name), phone, '', proper_case(location)))
+                    except Exception:
+                        pass
+                return
+            except Exception:
+                pass
+
         cdf = load_customers()
         key = str(name).strip().lower()
         idx = None
@@ -352,15 +434,32 @@ def invoice_app():
         desc = row["Description"]
     # Sync defaults when product changes
     if st.session_state.get("last_prod_inv") != product:
-        st.session_state["price_inv"] = float(row["UnitPrice"])
-        st.session_state["war_inv"] = int(row["Warranty"])
-        st.session_state["qty_inv"] = 1
+        if "price_inv" not in st.session_state:
+            st.session_state["price_inv"] = float(row["UnitPrice"])
+        else:
+            st.session_state["price_inv"] = float(row["UnitPrice"])
+        if "war_inv" not in st.session_state:
+            st.session_state["war_inv"] = int(row["Warranty"])
+        else:
+            st.session_state["war_inv"] = int(row["Warranty"])
+        if "qty_inv" not in st.session_state:
+            st.session_state["qty_inv"] = 1
+        else:
+            st.session_state["qty_inv"] = 1
         st.session_state["last_prod_inv"] = product
 
+    # Ensure keys exist (do not pass value= to widget)
+    if "qty_inv" not in st.session_state:
+        st.session_state["qty_inv"] = 1
+    if "price_inv" not in st.session_state:
+        st.session_state["price_inv"] = float(row["UnitPrice"])
+    if "war_inv" not in st.session_state:
+        st.session_state["war_inv"] = int(row["Warranty"])
+
     with e[1]:
-        qty = st.number_input("Qty", min_value=1, value=st.session_state.get("qty_inv", 1), step=1, label_visibility="collapsed", key="qty_inv")
+        qty = st.number_input("Qty", min_value=1, step=1, label_visibility="collapsed", key="qty_inv")
     with e[2]:
-        price = st.number_input("Unit Price (AED)", value=st.session_state.get("price_inv", float(row["UnitPrice"])), step=10.0, label_visibility="collapsed", key="price_inv")
+        price = st.number_input("Unit Price (AED)", step=10.0, label_visibility="collapsed", key="price_inv")
     line_total = qty * price
     with e[3]:
         st.markdown(

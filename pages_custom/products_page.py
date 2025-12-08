@@ -13,6 +13,10 @@ from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from utils.settings import load_settings
+try:
+    from utils import db as _db
+except Exception:
+    _db = None
 
 
 # ==========================================
@@ -40,6 +44,24 @@ def proper_case(text):
 
 def load_products() -> pd.DataFrame:
     ensure_product_file()
+    # Prefer DB source if available
+    if _db is not None:
+        try:
+            rows = _db.db_query(
+                'SELECT id, device as "Device", description as "Description", unit_price as "UnitPrice", warranty as "Warranty", image_base64 as "ImageBase64", image_path as "ImagePath" FROM products ORDER BY id'
+            )
+            if rows:
+                import pandas as _pd
+
+                df = _pd.DataFrame(rows)
+                for col in ["Device", "Description", "UnitPrice", "Warranty", "ImageBase64", "ImagePath"]:
+                    if col not in df.columns:
+                        df[col] = None
+                return df[["Device", "Description", "UnitPrice", "Warranty", "ImageBase64", "ImagePath"]]
+        except Exception:
+            # Fall back to Excel
+            pass
+
     try:
         df = pd.read_excel("data/products.xlsx")
         for col in ["Device", "Description", "UnitPrice", "Warranty", "ImageBase64", "ImagePath"]:
@@ -58,6 +80,67 @@ def save_products(df: pd.DataFrame):
         if col not in df.columns:
             df[col] = None
     df = df[["Device", "Description", "UnitPrice", "Warranty", "ImageBase64", "ImagePath"]]
+    if _db is not None:
+        try:
+            existing_rows = []
+            try:
+                existing_rows = _db.db_query("SELECT id, device FROM products")
+            except Exception:
+                existing_rows = []
+            existing_map = {}
+            for item in existing_rows or []:
+                name_val = (item.get("device") or "").strip()
+                if name_val:
+                    existing_map[name_val.lower()] = item.get("id")
+            seen_keys = set()
+            for _, row in df.iterrows():
+                device_val = row.get("Device")
+                device_text = str(device_val).strip() if device_val is not None else ""
+                if not device_text:
+                    continue
+                key = device_text.lower()
+                seen_keys.add(key)
+                desc_val = row.get("Description")
+                unit_val = row.get("UnitPrice")
+                try:
+                    unit_num = float(unit_val)
+                except Exception:
+                    unit_num = None
+                warranty_val = row.get("Warranty")
+                img_b64 = row.get("ImageBase64")
+                if pd.isna(img_b64):
+                    img_b64 = None
+                img_path = row.get("ImagePath") if "ImagePath" in row else None
+                if pd.isna(img_path):
+                    img_path = None
+                if key in existing_map and existing_map.get(key) is not None:
+                    try:
+                        _db.db_execute(
+                            "UPDATE products SET description = %s, unit_price = %s, warranty = %s, image_base64 = %s, image_path = %s WHERE id = %s",
+                            (desc_val, unit_num, warranty_val, img_b64, img_path, existing_map.get(key)),
+                        )
+                    except Exception:
+                        pass
+                else:
+                    inserted_row = None
+                    try:
+                        inserted_row = _db.db_execute(
+                            "INSERT INTO products(device, description, unit_price, warranty, image_base64, image_path) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id",
+                            (device_text, desc_val, unit_num, warranty_val, img_b64, img_path),
+                            returning=True,
+                        )
+                    except Exception:
+                        inserted_row = None
+                    if inserted_row and inserted_row.get("id"):
+                        existing_map[key] = inserted_row.get("id")
+            for key, pid in list(existing_map.items()):
+                if key and key not in seen_keys and pid is not None:
+                    try:
+                        _db.db_execute("DELETE FROM products WHERE id = %s", (pid,))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
     df.to_excel("data/products.xlsx", index=False)
 
 

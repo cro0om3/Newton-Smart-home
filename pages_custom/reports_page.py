@@ -6,6 +6,10 @@ from typing import Tuple
 import pandas as pd
 import streamlit as st
 import altair as alt
+try:
+    from utils import db as _db
+except Exception:
+    _db = None
 
 # ==========================================
 # File Ensurers
@@ -34,6 +38,22 @@ def ensure_report_files():
 
 def _load_records() -> pd.DataFrame:
     ensure_report_files()
+    # Try DB first
+    if _db is not None:
+        try:
+            rows = _db.db_query('SELECT base_id, date, type, number, amount, client_name, phone, location, note FROM records ORDER BY date')
+            if rows:
+                df = pd.DataFrame(rows)
+                df.columns = [c.strip().lower() for c in df.columns]
+                if "date" in df.columns:
+                    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                if "type" in df.columns:
+                    df["type"] = df["type"].astype(str).str.lower()
+                if "amount" in df.columns:
+                    df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0.0)
+                return df
+        except Exception:
+            pass
     try:
         df = pd.read_excel("data/records.xlsx")
         df.columns = [c.strip().lower() for c in df.columns]
@@ -52,6 +72,19 @@ def _load_records() -> pd.DataFrame:
 
 
 def _load_customers() -> pd.DataFrame:
+    # Try DB first
+    if _db is not None:
+        try:
+            rows = _db.db_query('SELECT id, name, phone, email, address FROM customers ORDER BY id')
+            if rows:
+                df = pd.DataFrame(rows)
+                df = df.rename(columns={'name':'client_name','address':'location'})
+                df.columns = [c.strip().lower() for c in df.columns]
+                if "next_follow_up" in df.columns:
+                    df["next_follow_up"] = pd.to_datetime(df["next_follow_up"], errors="coerce")
+                return df
+        except Exception:
+            pass
     try:
         df = pd.read_excel("data/customers.xlsx")
         df.columns = [c.strip().lower() for c in df.columns]
@@ -66,6 +99,14 @@ def _load_customers() -> pd.DataFrame:
 
 
 def _load_products() -> pd.DataFrame:
+    # Try DB first
+    if _db is not None:
+        try:
+            rows = _db.db_query('SELECT id, device as device, description as description, unit_price as unit_price, warranty as warranty, image_base64 as image_base64, image_path as image_path FROM products ORDER BY id')
+            if rows:
+                return pd.DataFrame(rows)
+        except Exception:
+            pass
     try:
         df = pd.read_excel("data/products.xlsx")
         return df

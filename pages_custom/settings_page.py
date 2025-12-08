@@ -21,6 +21,10 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from utils.auth import load_users, save_users, is_admin
 from utils.logger import log_event, load_logs
 from utils.settings import load_settings, save_settings
+try:
+    from utils import db as _db
+except Exception:
+    _db = None
 
 
 def _apply_settings_theme():
@@ -34,7 +38,7 @@ def _apply_settings_theme():
         
         /* Page background */
         .main .block-container {
-            background: #F7F7F8;
+            background: var(--bg-main);
             padding-top: 56px !important;
             padding-bottom: 60px !important;
             max-width: 1400px;
@@ -49,7 +53,7 @@ def _apply_settings_theme():
         .settings-page-title {
             font-size: 32px;
             font-weight: 700;
-            color: #1D1D1F;
+            color: var(--text-main);
             margin-bottom: 8px;
             margin-top: 12px;
             letter-spacing: -0.5px;
@@ -57,14 +61,14 @@ def _apply_settings_theme():
         
         .settings-subtitle {
             font-size: 15px;
-            color: #6E6E73;
+            color: var(--text-muted);
             margin-bottom: 40px;
         }
         
         /* CRM Card wrapper - refined */
         .crm-card {
-            background: #FFFFFF;
-            border: 1px solid rgba(0,0,0,0.06);
+            background: var(--bg-panel);
+            border: 1px solid var(--border-soft);
             border-radius: 16px;
             padding: 22px;
             margin-top: 36px;
@@ -76,7 +80,7 @@ def _apply_settings_theme():
         .crm-section-title {
             font-size: 22px;
             font-weight: 700;
-            color: #1D1D1F;
+            color: var(--text-main);
             margin-bottom: 20px;
             letter-spacing: -0.3px;
             padding-bottom: 14px;
@@ -86,7 +90,7 @@ def _apply_settings_theme():
         .crm-subsection {
             font-size: 16px;
             font-weight: 600;
-            color: #1D1D1F;
+            color: var(--text-main);
             margin-top: 24px;
             margin-bottom: 14px;
         }
@@ -103,7 +107,7 @@ def _apply_settings_theme():
         .stTabs [data-baseweb="tab"] {
             background: transparent;
             border: none;
-            color: #6E6E73;
+            color: var(--text-muted);
             font-size: 15px;
             font-weight: 500;
             padding: 14px 28px;
@@ -113,13 +117,13 @@ def _apply_settings_theme():
         }
         
         .stTabs [data-baseweb="tab"]:hover {
-            color: #1D1D1F;
+            color: var(--text-main);
             background: rgba(0,0,0,0.02);
         }
         
         .stTabs [aria-selected="true"] {
-            color: #0A84FF !important;
-            border-bottom: 2px solid #0A84FF !important;
+            color: var(--accent-blue) !important;
+            border-bottom: 2px solid var(--accent-blue) !important;
             background: transparent !important;
         }
         
@@ -132,7 +136,7 @@ def _apply_settings_theme():
         .stButton > button[kind="primary"],
         .stButton > button[type="primary"],
         .stForm button[kind="primary"] {
-            background: #0A84FF;
+            background: var(--accent-blue);
             color: white;
             border: none;
             border-radius: 10px;
@@ -145,17 +149,17 @@ def _apply_settings_theme():
         
         .stButton > button[kind="primary"]:hover,
         .stForm button[kind="primary"]:hover {
-            background: #0077ED;
-            box-shadow: 0 4px 12px rgba(10,132,255,0.3);
+            background: var(--accent-cyan);
+            box-shadow: 0 4px 12px rgba(56,189,248,0.18);
             transform: translateY(-1px);
         }
         
         /* Buttons - Secondary */
         .stButton > button[kind="secondary"],
         .stButton > button[type="secondary"] {
-            background: white;
-            color: #1D1D1F;
-            border: 1px solid rgba(0,0,0,0.08);
+            background: var(--bg-panel);
+            color: var(--text-main);
+            border: 1px solid var(--border-soft);
             border-radius: 10px;
             padding: 11px 26px;
             font-weight: 500;
@@ -171,9 +175,9 @@ def _apply_settings_theme():
         
         /* Regular buttons */
         .stButton > button {
-            background: white;
-            color: #1D1D1F;
-            border: 1px solid rgba(0,0,0,0.08);
+            background: var(--bg-panel);
+            color: var(--text-main);
+            border: 1px solid var(--border-soft);
             border-radius: 10px;
             padding: 11px 26px;
             font-weight: 500;
@@ -223,8 +227,8 @@ def _apply_settings_theme():
         .stSelectbox > div > div > div:focus-within,
         .stMultiSelect > div > div > div:focus-within,
         .stNumberInput > div > div > input:focus {
-            border-color: #0A84FF !important;
-            box-shadow: 0 0 0 3px rgba(10,132,255,0.1) !important;
+            border-color: var(--accent-blue) !important;
+            box-shadow: 0 0 0 3px rgba(56,189,248,0.1) !important;
         }
         
         /* Expanders replaced with CRM cards */
@@ -269,12 +273,12 @@ def _apply_settings_theme():
         
         /* DataFrame headers */
         .stDataFrame thead tr {
-            background: #F7F7F8 !important;
+            background: var(--bg-panel) !important;
         }
         
         .stDataFrame thead th {
             font-weight: 600 !important;
-            color: #1D1D1F !important;
+            color: var(--text-main) !important;
             border-bottom: 1px solid rgba(0,0,0,0.08) !important;
             padding: 12px 16px !important;
         }
@@ -286,16 +290,16 @@ def _apply_settings_theme():
         }
         
         .stDataFrame tbody tr:nth-child(even) {
-            background: #FAFAFA;
+            background: var(--bg-panel);
         }
         
         .stDataFrame tbody tr:hover {
-            background: #F0F4F8 !important;
+            background: rgba(56,189,248,0.02) !important;
         }
         
         .stDataFrame tbody td {
             padding: 12px 16px !important;
-            color: #1D1D1F;
+            color: var(--text-main);
         }
         
         /* File uploader - refined */
@@ -303,15 +307,15 @@ def _apply_settings_theme():
             border: 1px solid rgba(0,0,0,0.06);
             border-radius: 14px;
             padding: 24px;
-            background: #F5F7FA;
+            background: var(--bg-panel);
             transition: all 0.2s ease;
             text-align: center;
         }
         
         .stFileUploader:hover {
-            border-color: #0A84FF;
-            background: #F0F6FF;
-            box-shadow: 0 2px 12px rgba(10,132,255,0.08);
+            border-color: var(--accent-blue);
+            background: linear-gradient(135deg, rgba(56,189,248,0.02), rgba(34,211,238,0.01));
+            box-shadow: 0 2px 12px rgba(56,189,248,0.04);
         }
         
         .stFileUploader label {
@@ -330,42 +334,42 @@ def _apply_settings_theme():
         /* Warning - improved */
         div[data-baseweb="notification"] [data-testid="stNotificationContentWarning"],
         .stAlert[data-baseweb="notification"] {
-            background: #FFFBEA !important;
-            border: 1px solid #FFE8A3 !important;
+            background: rgba(250,204,21,0.06) !important;
+            border: 1px solid rgba(250,204,21,0.14) !important;
             color: #7A5B00 !important;
         }
         
         /* Success */
         div[data-baseweb="notification"] [data-testid="stNotificationContentSuccess"] {
-            background: #E8F8F0;
-            border-left: 3px solid #00C853;
-            color: #1D1D1F;
+            background: rgba(34,211,238,0.03);
+            border-left: 3px solid var(--accent-cyan);
+            color: var(--text-main);
         }
         
         /* Error */
         div[data-baseweb="notification"] [data-testid="stNotificationContentError"] {
-            background: #FFEBE9;
-            border-left: 3px solid #FF3B30;
-            color: #1D1D1F;
+            background: rgba(249,115,115,0.03);
+            border-left: 3px solid var(--accent-gold);
+            color: var(--text-main);
         }
         
         /* Info */
         div[data-baseweb="notification"] [data-testid="stNotificationContentInfo"] {
-            background: #F5F9FF;
-            border-left: 3px solid #0A84FF;
-            color: #1D1D1F;
+            background: rgba(56,189,248,0.02);
+            border-left: 3px solid var(--accent-blue);
+            color: var(--text-main);
         }
         
         /* Dividers */
         hr {
             border: none;
-            border-bottom: 1px solid rgba(0,0,0,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.03);
             margin: 28px 0;
         }
         
         /* Download buttons */
         .stDownloadButton > button {
-            background: #0A84FF;
+            background: var(--accent-blue);
             color: white;
             border: none;
             border-radius: 10px;
@@ -376,15 +380,15 @@ def _apply_settings_theme():
         }
         
         .stDownloadButton > button:hover {
-            background: #0077ED;
-            box-shadow: 0 4px 12px rgba(10,132,255,0.3);
+            background: var(--accent-cyan);
+            box-shadow: 0 4px 12px rgba(56,189,248,0.18);
             transform: translateY(-1px);
         }
         
         /* Metrics for log viewer - neutral gray */
         .log-metric {
-            background: white;
-            border: 1px solid rgba(0,0,0,0.06);
+            background: var(--bg-panel);
+            border: 1px solid var(--border-soft);
             border-radius: 16px;
             padding: 20px 24px;
             text-align: center;
@@ -400,13 +404,13 @@ def _apply_settings_theme():
         .log-metric-value {
             font-size: 26px;
             font-weight: 700;
-            color: #1D1D1F;
+            color: var(--text-main);
             margin-bottom: 6px;
         }
         
         .log-metric-label {
             font-size: 13px;
-            color: #6E6E73;
+            color: var(--text-muted);
             font-weight: 500;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -675,6 +679,54 @@ def system_config_section(user, user_name):
             st.success("✓ Configuration saved successfully")
             st.rerun()
 
+        st.markdown('<div class="spacing-lg"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="crm-subsection">\u0623\u062f\u0648\u0627\u062a \u0627\u0644\u062a\u0634\u062e\u064a\u0635 \u0627\u0644\u0633\u0631\u064a\u0639</div>', unsafe_allow_html=True)
+        st.caption("استخدم الأزرار التالية لفحص أكثر الأعطال شيوعا دون تغيير أي بيانات.")
+
+        dbg_col1, dbg_col2, dbg_col3 = st.columns(3)
+
+        if dbg_col1.button("\u200f\u0641\u062d\u0635 \u0645\u0644\u0641\u0627\u062a \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a", key="debug_files"):
+            files = [
+                ("products.xlsx", "data/products.xlsx"),
+                ("customers.xlsx", "data/customers.xlsx"),
+                ("records.xlsx", "data/records.xlsx"),
+                ("users.xlsx", "data/users.xlsx"),
+                ("logs.xlsx", "data/logs.xlsx"),
+                ("settings.json", "data/settings.json")
+            ]
+            status_rows = []
+            for name, path in files:
+                exists = os.path.exists(path)
+                status_rows.append({
+                    "الملف": name,
+                    "المسار": path,
+                    "الحالة": "موجود" if exists else "مفقود"
+                })
+            st.dataframe(pd.DataFrame(status_rows))
+
+        if dbg_col2.button("\u200f\u0639\u0631\u0636 \u0622\u062e\u0631 \u0627\u0644\u0633\u062c\u0644\u0627\u062a", key="debug_logs"):
+            logs_df = load_logs()
+            if logs_df.empty:
+                st.info("لا توجد سجلات محفوظة حاليا.")
+            else:
+                preview = logs_df.head(10)
+                st.dataframe(preview)
+
+        if dbg_col3.button("\u200f\u0641\u062d\u0635 \u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0627\u062a\u0635\u0627\u0644", key="debug_connection"):
+            if _db is None:
+                st.warning("مكتبة قاعدة البيانات غير محمّلة حاليا.")
+            else:
+                try:
+                    conn_value = _db.get_connection_string()
+                except Exception as err:
+                    st.error(f"خطأ أثناء قراءة الإعدادات: {err}")
+                else:
+                    if conn_value:
+                        masked = conn_value[: min(6, len(conn_value))] + "***"
+                        st.success(f"تم العثور على سلسلة اتصال: {masked}")
+                    else:
+                        st.info("لا توجد سلسلة اتصال مهيأة. تأكد من secrets أو المتغيرات البيئية.")
+
 
 # ========================================================
 # SECTION 3: TEMPLATE MANAGER
@@ -687,7 +739,11 @@ def template_manager_section(user, user_name):
         return
     
     st.markdown('<div class="crm-section-title">Document Templates</div>', unsafe_allow_html=True)
-    st.markdown('<p style="color: #6E6E73; font-size: 14px; margin-bottom: 24px;">Manage Word document templates for quotations, invoices, and receipts.</p>', unsafe_allow_html=True)
+    st.markdown(
+        '<p style="color: var(--text-muted); font-size: 14px; margin-bottom: 24px;">'
+        'Manage Word document templates for quotations, invoices, and receipts.</p>',
+        unsafe_allow_html=True,
+    )
     
     templates = {
         "Quotation": "quotation_template.docx",
@@ -735,7 +791,11 @@ def backup_restore_section(user, user_name):
     
     # Backup section
     st.markdown('<div class="crm-section-title">Create Backup</div>', unsafe_allow_html=True)
-    st.markdown('<p style="color: #6E6E73; font-size: 14px; margin-bottom: 20px;">Download a complete backup of all system data including users, products, customers, records, logs, and settings.</p>', unsafe_allow_html=True)
+    st.markdown(
+        '<p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">'
+        'Download a complete backup of all system data including users, products, customers, records, logs, and settings.</p>',
+        unsafe_allow_html=True,
+    )
     
     if st.button("Download Full Backup", type="primary"):
         try:
@@ -833,7 +893,7 @@ def log_viewer_section(user, user_name):
         filtered = filtered[filtered["action"].str.contains(f_action, case=False, na=False)]
     
     st.markdown('<div class="spacing-sm"></div>', unsafe_allow_html=True)
-    st.markdown(f'<p style="color: #6E6E73; font-size: 14px;">Showing <strong>{len(filtered)}</strong> of <strong>{len(logs)}</strong> logs</p>', unsafe_allow_html=True)
+    st.markdown(f'<p style="color: var(--text-muted); font-size: 14px;">Showing <strong>{len(filtered)}</strong> of <strong>{len(logs)}</strong> logs</p>', unsafe_allow_html=True)
     
     st.dataframe(filtered, use_container_width=True, hide_index=True, height=400)
     

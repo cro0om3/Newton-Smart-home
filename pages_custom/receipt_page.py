@@ -5,6 +5,10 @@ from utils.quotation_utils import render_quotation_html
 from utils.settings import load_settings
 from docx import Document
 from io import BytesIO
+try:
+    from utils import db as _db
+except Exception:
+    _db = None
 
 
 def receipt_app():
@@ -48,6 +52,15 @@ def receipt_app():
     # HELPERS
     # =====================================
     def load_records():
+        if _db is not None:
+            try:
+                rows = _db.db_query('SELECT base_id, date, type, number, amount, client_name, phone, location, note FROM records ORDER BY date')
+                if rows:
+                    df = pd.DataFrame(rows)
+                    df.columns = [c.strip().lower() for c in df.columns]
+                    return df
+            except Exception:
+                pass
         try:
             df = pd.read_excel("data/records.xlsx")
             df.columns = [c.strip().lower() for c in df.columns]
@@ -59,6 +72,20 @@ def receipt_app():
             ])
 
     def save_record(rec):
+        # Try DB first then fallback to Excel
+        if _db is not None:
+            try:
+                if rec.get('type') and rec.get('number'):
+                    try:
+                        _db.db_execute('DELETE FROM records WHERE type = %s AND number = %s', (rec.get('type'), rec.get('number')))
+                    except Exception:
+                        pass
+                _db.db_execute('INSERT INTO records(base_id, date, type, number, amount, client_name, phone, location, note) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                                (rec.get('base_id'), rec.get('date'), rec.get('type'), rec.get('number'), rec.get('amount'), rec.get('client_name'), rec.get('phone'), rec.get('location'), rec.get('note')))
+                return
+            except Exception:
+                pass
+
         df = load_records()
         if not df.empty and {"type", "number"}.issubset(df.columns):
             df = df[~((df["type"] == rec.get("type")) & (df["number"] == rec.get("number")))]

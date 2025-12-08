@@ -211,7 +211,10 @@ if not st.session_state.authenticated:
             label_visibility="collapsed"
         )
         
-        show_hide = st.checkbox("Show PIN", value=st.session_state.show_pin, key="show_pin_checkbox")
+        # Ensure the checkbox key exists in session_state (do not pass value=)
+        if "show_pin_checkbox" not in st.session_state:
+            st.session_state.show_pin_checkbox = st.session_state.show_pin
+        show_hide = st.checkbox("Show PIN", key="show_pin_checkbox")
         if show_hide != st.session_state.show_pin:
             st.session_state.show_pin = show_hide
             st.rerun()

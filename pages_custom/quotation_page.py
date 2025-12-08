@@ -12,6 +12,10 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from utils.logger import log_event
 from utils.settings import load_settings
+try:
+    from utils import db as _db
+except Exception:
+    _db = None
  # تم حذف الاستيراد غير المستخدم requests
 
 def proper_case(text):
@@ -86,11 +90,22 @@ def quotation_app():
     # =========================
     # Setup
     # =========================
-    try:
-        catalog = pd.read_excel("data/products.xlsx")
-    except:
-        st.error("❌ ERROR: Cannot load product catalog")
-        return
+    catalog = None
+    if _db is not None:
+        try:
+            rows = _db.db_query(
+                'SELECT device as "Device", description as "Description", unit_price as "UnitPrice", warranty as "Warranty", image_base64 as "ImageBase64", image_path as "ImagePath" FROM products ORDER BY id'
+            )
+            if rows:
+                catalog = pd.DataFrame(rows)
+        except Exception:
+            catalog = None
+    if catalog is None:
+        try:
+            catalog = pd.read_excel("data/products.xlsx")
+        except Exception:
+            st.error("❌ ERROR: Cannot load product catalog")
+            return
 
     required_cols = ["Device", "Description", "UnitPrice", "Warranty"]
     for col in required_cols:
@@ -100,6 +115,16 @@ def quotation_app():
 
     # Records helpers (match invoice logic)
     def load_records():
+        # Try DB first, fallback to Excel
+        if _db is not None:
+            try:
+                rows = _db.db_query('SELECT base_id, date, type, number, amount, client_name, phone, location, note FROM records ORDER BY date')
+                if rows:
+                    df = pd.DataFrame(rows)
+                    df.columns = [c.strip().lower() for c in df.columns]
+                    return df
+            except Exception:
+                pass
         try:
             df = pd.read_excel("data/records.xlsx")
             df.columns = [c.strip().lower() for c in df.columns]
@@ -110,6 +135,23 @@ def quotation_app():
             ])
 
     def save_record(rec: dict):
+        # Try saving to DB, fallback to Excel
+        if _db is not None:
+            try:
+                # Delete existing by type+number then insert
+                if rec.get('type') and rec.get('number'):
+                    try:
+                        _db.db_execute('DELETE FROM records WHERE type = %s AND number = %s', (rec.get('type'), rec.get('number')))
+                    except Exception:
+                        pass
+                _db.db_execute(
+                    'INSERT INTO records(base_id, date, type, number, amount, client_name, phone, location, note) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                    (rec.get('base_id'), rec.get('date'), rec.get('type'), rec.get('number'), rec.get('amount'), rec.get('client_name'), rec.get('phone'), rec.get('location'), rec.get('note'))
+                )
+                return
+            except Exception:
+                pass
+
         df = load_records()
         if not df.empty and {"type", "number"}.issubset(df.columns):
             df = df[~((df["type"] == rec.get("type")) & (df["number"] == rec.get("number")))]
@@ -130,6 +172,17 @@ def quotation_app():
             pd.DataFrame(columns=cols).to_excel(path, index=False)
 
     def load_customers():
+        # Try DB first then fallback to Excel
+        if _db is not None:
+            try:
+                rows = _db.db_query('SELECT id, name, phone, email, address FROM customers ORDER BY id')
+                if rows:
+                    df = pd.DataFrame(rows)
+                    df = df.rename(columns={'name':'client_name', 'address':'location'})
+                    df.columns = [c.strip().lower() for c in df.columns]
+                    return df
+            except Exception:
+                pass
         ensure_customers_file()
         try:
             df = pd.read_excel("data/customers.xlsx")
@@ -143,11 +196,61 @@ def quotation_app():
 
     def save_customers(df: pd.DataFrame):
         os.makedirs("data", exist_ok=True)
+        # Try DB sync (upsert) then write Excel to preserve app-specific fields
+        if _db is not None:
+            try:
+                for _, row in df.iterrows():
+                    name = str(row.get('client_name') or '')
+                    phone = row.get('phone')
+                    email = row.get('email')
+                    address = row.get('location')
+                    try:
+                        existing = _db.db_query('SELECT id FROM customers WHERE name = %s AND phone = %s', (name, phone))
+                    except Exception:
+                        existing = []
+                    if existing:
+                        try:
+                            _db.db_execute('UPDATE customers SET email = %s, address = %s WHERE id = %s', (email, address, existing[0].get('id')))
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            _db.db_execute('INSERT INTO customers(name, phone, email, address) VALUES (%s,%s,%s,%s)', (name, phone, email, address))
+                        except Exception:
+                            pass
+                df.to_excel("data/customers.xlsx", index=False)
+                return
+            except Exception:
+                pass
         df.to_excel("data/customers.xlsx", index=False)
 
     def upsert_customer_from_quotation(name: str, phone: str, location: str):
         if not str(name).strip():
             return
+        # Try DB upsert matching DB schema, otherwise fall back to Excel logic
+        if _db is not None:
+            try:
+                # Simple phone/name lookup
+                existing = []
+                try:
+                    existing = _db.db_query('SELECT id FROM customers WHERE name = %s OR phone = %s', (proper_case(name), phone))
+                except Exception:
+                    existing = []
+                if existing:
+                    try:
+                        _db.db_execute('UPDATE customers SET phone = %s, address = %s WHERE id = %s', (phone, proper_case(location), existing[0].get('id')))
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        _db.db_execute('INSERT INTO customers(name, phone, email, address) VALUES (%s,%s,%s,%s)', (proper_case(name), phone, '', proper_case(location)))
+                    except Exception:
+                        pass
+                return
+            except Exception:
+                pass
+
+        # Fallback: original Excel behaviour
         ensure_customers_file()
         cdf = load_customers()
         key = str(name).strip().lower()
@@ -297,12 +400,15 @@ def quotation_app():
             row = catalog[catalog["Device"] == product].iloc[0]
             desc = row["Description"]
 
-        if f"qty_val_{entry_idx}" not in st.session_state:
-            st.session_state[f"qty_val_{entry_idx}"] = 1
-        if f"price_val_{entry_idx}" not in st.session_state:
-            st.session_state[f"price_val_{entry_idx}"] = float(row["UnitPrice"])
-        if f"war_val_{entry_idx}" not in st.session_state:
-            st.session_state[f"war_val_{entry_idx}"] = int(row["Warranty"])
+        key_qty = f"qty_val_{entry_idx}"
+        key_price = f"price_val_{entry_idx}"
+        key_war = f"war_val_{entry_idx}"
+        if key_qty not in st.session_state:
+            st.session_state[key_qty] = 1
+        if key_price not in st.session_state:
+            st.session_state[key_price] = float(row["UnitPrice"])
+        if key_war not in st.session_state:
+            st.session_state[key_war] = int(row["Warranty"])
         # Sync price and warranty when product changes
         last_key = f"last_prod_{entry_idx}"
         if st.session_state.get(last_key) != product:
@@ -315,8 +421,7 @@ def quotation_app():
                 "Qty",
                 min_value=1,
                 step=1,
-                value=st.session_state[f"qty_val_{entry_idx}"],
-                key=f"qty_val_{entry_idx}",
+                key=key_qty,
                 label_visibility="collapsed"
             )
 
@@ -325,8 +430,7 @@ def quotation_app():
                 "Unit Price (AED)",
                 min_value=0.0,
                 step=10.0,
-                value=st.session_state[f"price_val_{entry_idx}"],
-                key=f"price_val_{entry_idx}",
+                key=key_price,
                 label_visibility="collapsed"
             )
 
@@ -345,8 +449,7 @@ def quotation_app():
                 "Warranty (Years)",
                 min_value=0,
                 step=1,
-                value=st.session_state[f"war_val_{entry_idx}"],
-                key=f"war_val_{entry_idx}",
+                key=key_war,
                 label_visibility="collapsed"
             )
 
@@ -725,6 +828,62 @@ def quotation_app():
                     "note": ""
                 })
                 upsert_customer_from_quotation(client_name, phone_raw, client_location)
+                # Attempt to persist quotation and items to DB (non-intrusive)
+                if _db is not None:
+                    try:
+                        # Ensure customer exists (upsert already attempted above)
+                        cust = None
+                        try:
+                            cust_rows = _db.db_query('SELECT id FROM customers WHERE name = %s AND phone = %s', (proper_case(client_name), phone_raw))
+                            cust = cust_rows[0].get('id') if cust_rows else None
+                        except Exception:
+                            cust = None
+
+                        # Insert quotation and items
+                        try:
+                            qrow = _db.db_execute(
+                                'INSERT INTO quotations(quote_number, customer_id, subtotal, installation_fee, total_amount, status, notes) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id',
+                                (quote_no, cust, product_total, installation_cost_val, grand_total, 'pending', ''),
+                                returning=True,
+                            )
+                            quotation_id = qrow.get('id') if qrow else None
+                        except Exception:
+                            quotation_id = None
+
+                        products = st.session_state.product_table.to_dict('records') if 'product_table' in st.session_state else []
+                        if quotation_id is not None and products:
+                            for p in products:
+                                try:
+                                    prod_name = p.get('Product / Device')
+                                    prod_rows = _db.db_query('SELECT id FROM products WHERE lower(device) = lower(%s) LIMIT 1', (prod_name,))
+                                    prod_id = prod_rows[0].get('id') if prod_rows else None
+                                except Exception:
+                                    prod_id = None
+                                try:
+                                    _db.db_execute(
+                                        'INSERT INTO quotation_items(quotation_id, product_id, description, quantity, unit_price, line_total, warranty) VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                                        (
+                                            quotation_id,
+                                            prod_id,
+                                            p.get('Description'),
+                                            p.get('Qty') or 0,
+                                            p.get('Unit Price (AED)') or 0,
+                                            p.get('Line Total (AED)') or 0,
+                                            str(p.get('Warranty (Years)') or ''),
+                                        ),
+                                    )
+                                except Exception:
+                                    # Don't block on item-level failures
+                                    pass
+                        # Optionally track the export
+                        try:
+                            _db.db_execute('INSERT INTO exports(quotation_id, export_type, file_path, metadata) VALUES (%s,%s,%s,%s)', (quotation_id, 'word', '', None))
+                        except Exception:
+                            pass
+                    except Exception:
+                        # If any DB error occurs, fall back silently to Excel behaviour
+                        pass
+
                 # Log quotation creation
                 user = st.session_state.get("user", {})
                 log_event(user.get("name", "Unknown"), "Quotation", "quotation_created", 
@@ -767,6 +926,57 @@ def quotation_app():
                     "note": "PDF"
                 })
                 upsert_customer_from_quotation(client_name, phone_raw, client_location)
+                # Attempt DB persistence of quotation and items (non-intrusive)
+                if _db is not None:
+                    try:
+                        cust = None
+                        try:
+                            cust_rows = _db.db_query('SELECT id FROM customers WHERE name = %s AND phone = %s', (proper_case(client_name), phone_raw))
+                            cust = cust_rows[0].get('id') if cust_rows else None
+                        except Exception:
+                            cust = None
+
+                        qrow = None
+                        try:
+                            qrow = _db.db_execute(
+                                'INSERT INTO quotations(quote_number, customer_id, subtotal, installation_fee, total_amount, status, notes) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id',
+                                (quote_no, cust, product_total, installation_cost_val, grand_total, 'pending', ''),
+                                returning=True,
+                            )
+                        except Exception:
+                            qrow = None
+                        quotation_id = qrow.get('id') if qrow else None
+                        products = st.session_state.product_table.to_dict('records') if 'product_table' in st.session_state else []
+                        if quotation_id is not None and products:
+                            for p in products:
+                                try:
+                                    prod_name = p.get('Product / Device')
+                                    prod_rows = _db.db_query('SELECT id FROM products WHERE lower(device) = lower(%s) LIMIT 1', (prod_name,))
+                                    prod_id = prod_rows[0].get('id') if prod_rows else None
+                                except Exception:
+                                    prod_id = None
+                                try:
+                                    _db.db_execute(
+                                        'INSERT INTO quotation_items(quotation_id, product_id, description, quantity, unit_price, line_total, warranty) VALUES (%s,%s,%s,%s,%s,%s,%s)',
+                                        (
+                                            quotation_id,
+                                            prod_id,
+                                            p.get('Description'),
+                                            p.get('Qty') or 0,
+                                            p.get('Unit Price (AED)') or 0,
+                                            p.get('Line Total (AED)') or 0,
+                                            str(p.get('Warranty (Years)') or ''),
+                                        ),
+                                    )
+                                except Exception:
+                                    pass
+                        try:
+                            _db.db_execute('INSERT INTO exports(quotation_id, export_type, file_path, metadata) VALUES (%s,%s,%s,%s)', (quotation_id, 'pdf', '', None))
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+
                 st.success(f"✅ Saved PDF quotation with base {base_id}")
         except Exception as e:
             st.error(f"❌ Unable to prepare PDF: {e}")

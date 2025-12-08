@@ -7,6 +7,10 @@ import os
 import pandas as pd
 from datetime import datetime
 from typing import Optional
+try:
+    from utils import db as _db
+except Exception:
+    _db = None
 
 
 def ensure_logs_file():
@@ -29,14 +33,24 @@ def log_event(user: str, page: str, action: str, details: str = ""):
         details: Additional details about the event
     """
     try:
+        # Try DB first (non-intrusive). Table 'logs' is optional in schema.
+        if _db is not None:
+            try:
+                _db.db_execute('INSERT INTO logs("timestamp", "user", page, action, details) VALUES (%s,%s,%s,%s,%s)', (
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"), str(user), str(page), str(action), str(details)
+                ))
+                return
+            except Exception:
+                # Fall back to Excel below
+                pass
+
         ensure_logs_file()
-        
         # Load existing logs
         try:
             logs = pd.read_excel("data/logs.xlsx")
         except:
             logs = pd.DataFrame(columns=["timestamp", "user", "page", "action", "details"])
-        
+
         # Create new log entry
         new_log = pd.DataFrame([{
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -45,11 +59,10 @@ def log_event(user: str, page: str, action: str, details: str = ""):
             "action": str(action),
             "details": str(details)
         }])
-        
+
         # Append and save
         logs = pd.concat([logs, new_log], ignore_index=True)
         logs.to_excel("data/logs.xlsx", index=False)
-        
     except Exception as e:
         print(f"Error logging event: {e}")
 
@@ -64,30 +77,57 @@ def load_logs(filters: Optional[dict] = None) -> pd.DataFrame:
     Returns:
         Filtered DataFrame
     """
-    ensure_logs_file()
+    # Try DB first
     try:
-        logs = pd.read_excel("data/logs.xlsx")
-        logs.columns = [c.strip().lower() for c in logs.columns]
-        
-        if filters:
+        if _db is not None:
+            try:
+                rows = _db.db_query('SELECT timestamp, "user", page, action, details FROM logs ORDER BY timestamp DESC')
+                df = pd.DataFrame(rows)
+                df.columns = [c.strip().lower() for c in df.columns]
+                logs = df
+            except Exception:
+                logs = None
+        else:
+            logs = None
+    except Exception:
+        logs = None
+
+    if logs is None:
+        # Excel fallback
+        ensure_logs_file()
+        try:
+            logs = pd.read_excel("data/logs.xlsx")
+            logs.columns = [c.strip().lower() for c in logs.columns]
+        except Exception as e:
+            print(f"Error loading logs: {e}")
+            return pd.DataFrame(columns=["timestamp", "user", "page", "action", "details"])
+
+    if filters:
+        try:
             if filters.get("user"):
                 logs = logs[logs["user"].str.contains(filters["user"], case=False, na=False)]
             if filters.get("page"):
                 logs = logs[logs["page"].str.contains(filters["page"], case=False, na=False)]
             if filters.get("action"):
                 logs = logs[logs["action"].str.contains(filters["action"], case=False, na=False)]
-            # Add date filtering if needed
-        
-        return logs.sort_values("timestamp", ascending=False) if "timestamp" in logs.columns else logs
-        
-    except Exception as e:
-        print(f"Error loading logs: {e}")
-        return pd.DataFrame(columns=["timestamp", "user", "page", "action", "details"])
+        except Exception:
+            pass
+
+    return logs.sort_values("timestamp", ascending=False) if "timestamp" in logs.columns else logs
 
 
 def clear_old_logs(days: int = 90):
     """Delete logs older than specified days."""
     try:
+        # Try DB delete if logs table exists
+        if _db is not None:
+            try:
+                cutoff = (datetime.now() - pd.Timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
+                _db.db_execute('DELETE FROM logs WHERE "timestamp" < %s', (cutoff,))
+                return
+            except Exception:
+                pass
+
         logs = pd.read_excel("data/logs.xlsx")
         logs["timestamp"] = pd.to_datetime(logs["timestamp"])
         cutoff = datetime.now() - pd.Timedelta(days=days)

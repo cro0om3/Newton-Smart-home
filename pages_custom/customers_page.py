@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import os
+try:
+    from utils import db as _db
+except Exception:
+    _db = None
 
 
 # ===== Excel Auto-Creation (as specified) =====
@@ -91,6 +95,30 @@ RECORDS_XLSX = "data/records.xlsx"
 
 
 def load_customers():
+    # Try loading from Postgres (non-intrusive). If DB unavailable or mismatch, fall back to Excel.
+    if _db is not None:
+        try:
+            rows = _db.db_query('SELECT id, name, phone, email, address FROM customers ORDER BY id')
+            if rows:
+                df = pd.DataFrame(rows)
+                # map DB columns to expected app columns
+                df = df.rename(columns={'name': 'client_name', 'address': 'location'})
+                # Ensure all expected columns exist
+                for col in [
+                    "client_name", "phone", "location", "email", "status",
+                    "notes", "tags", "next_follow_up", "assigned_to", "last_activity"
+                ]:
+                    if col not in df.columns:
+                        df[col] = None
+                # Keep column order expected by app
+                return df[[
+                    "client_name", "phone", "location", "email", "status",
+                    "notes", "tags", "next_follow_up", "assigned_to", "last_activity"
+                ]]
+        except Exception:
+            # Any DB error -> fall back to Excel
+            pass
+
     try:
         df = pd.read_excel(CUSTOMERS_XLSX)
     except Exception:
@@ -113,10 +141,57 @@ def load_customers():
 
 def save_customers(df: pd.DataFrame):
     os.makedirs("data", exist_ok=True)
+    # Try to persist to DB (non-intrusive). If DB ops fail, fall back to writing Excel only.
+    if _db is not None:
+        try:
+            # For each row, attempt to upsert by matching name and phone
+            for _, row in df.iterrows():
+                name = str(row.get('client_name') or '')
+                phone = row.get('phone')
+                email = row.get('email')
+                address = row.get('location')
+
+                # Try find existing
+                try:
+                    existing = _db.db_query('SELECT id FROM customers WHERE name = %s AND phone = %s', (name, phone))
+                except Exception:
+                    existing = []
+
+                if existing:
+                    # update
+                    try:
+                        _db.db_execute('UPDATE customers SET email = %s, address = %s WHERE id = %s', (email, address, existing[0].get('id')))
+                    except Exception:
+                        # ignore per-row failure and continue
+                        pass
+                else:
+                    try:
+                        _db.db_execute('INSERT INTO customers(name, phone, email, address) VALUES (%s, %s, %s, %s)', (name, phone, email, address))
+                    except Exception:
+                        pass
+            # After attempting DB sync, still write Excel to preserve full app fields
+            df.to_excel(CUSTOMERS_XLSX, index=False)
+            return
+        except Exception:
+            # Any DB-level error -> fall back to Excel-only
+            pass
+
+    # Default: write Excel file
     df.to_excel(CUSTOMERS_XLSX, index=False)
 
 
 def load_records():
+    # Try DB first
+    if _db is not None:
+        try:
+            rows = _db.db_query('SELECT base_id, date, type, number, amount, client_name, phone, location, note FROM records ORDER BY date')
+            if rows:
+                df = pd.DataFrame(rows)
+                df.columns = [c.strip().lower() for c in df.columns]
+                return df
+        except Exception:
+            pass
+
     try:
         df = pd.read_excel(RECORDS_XLSX)
         df.columns = [c.strip().lower() for c in df.columns]

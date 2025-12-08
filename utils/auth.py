@@ -6,6 +6,10 @@ Handles PIN-based login, user data, and permissions.
 import os
 import pandas as pd
 from typing import Optional, Dict
+try:
+    from utils import db as _db
+except Exception:
+    _db = None
 
 
 def ensure_users_file():
@@ -41,6 +45,21 @@ def load_users() -> pd.DataFrame:
     Load users from data/users.xlsx.
     Returns DataFrame with columns: name, pin, role, allowed_pages
     """
+    # Try DB first (users table exists in DDL)
+    try:
+        if _db is not None:
+            try:
+                rows = _db.db_query('SELECT name, pin, role, allowed_pages FROM users ORDER BY id')
+                if rows:
+                    df = pd.DataFrame(rows)
+                    df.columns = [c.strip().lower() for c in df.columns]
+                    return df
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Excel fallback
     ensure_users_file()
     try:
         df = pd.read_excel("data/users.xlsx")
@@ -59,6 +78,31 @@ def save_users(df: pd.DataFrame):
     Save users DataFrame to data/users.xlsx.
     """
     try:
+        # Try DB upsert for each user row, then write Excel as fallback/persistence
+        if _db is not None:
+            try:
+                for _, row in df.iterrows():
+                    name = str(row.get('name') or '')
+                    pin = str(row.get('pin') or '')
+                    role = str(row.get('role') or '')
+                    allowed = row.get('allowed_pages')
+                    try:
+                        existing = _db.db_query('SELECT id FROM users WHERE name = %s LIMIT 1', (name,))
+                    except Exception:
+                        existing = []
+                    if existing:
+                        try:
+                            _db.db_execute('UPDATE users SET pin=%s, role=%s, allowed_pages=%s WHERE id = %s', (pin, role, str(allowed), existing[0].get('id')))
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            _db.db_execute('INSERT INTO users(name, pin, role, allowed_pages) VALUES (%s,%s,%s,%s)', (name, pin, role, str(allowed)))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
         os.makedirs("data", exist_ok=True)
         df.to_excel("data/users.xlsx", index=False)
     except Exception as e:
