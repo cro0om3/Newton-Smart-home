@@ -484,6 +484,19 @@ def settings_app():
         "Backup & Restore",
         "Activity Logs"
     ])
+
+    # Accent selector (non-blocking) - keep themes unchanged but allow overlay accents
+    with st.expander("Theme Accent (optional)"):
+        current = st.session_state.get('ui_accent', 'none')
+        sel = st.selectbox("Accent Overlay", ["none", "winter"], index=["none","winter"].index(current))
+        if sel != current:
+            st.session_state['ui_accent'] = sel
+            try:
+                from utils.settings import update_setting
+                update_setting('ui_accent', sel)
+            except Exception:
+                pass
+            st.success(f"Accent set to: {sel}")
     
     with tab1:
         user_management_section(user, user_name)

@@ -5,10 +5,20 @@ import os
 from io import BytesIO
 import base64
 import tempfile
-from docx import Document
-from docx.shared import Pt, Cm
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from streamlit.components.v1 import html as st_html
+# Optional dependency: python-docx (used for Word export). Guard imports so missing packages don't crash the app.
+HAVE_PYDOX = True
+try:
+    from docx import Document
+    from docx.shared import Pt, Cm
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+except Exception:
+    HAVE_PYDOX = False
+
+# Optional Streamlit components import (some Streamlit setups may not expose components in static analysis)
+try:
+    from streamlit.components.v1 import html as st_html
+except Exception:
+    st_html = None
 from utils.quotation_utils import render_quotation_html, html_to_pdf
 from pathlib import Path
 import sys
@@ -40,6 +50,12 @@ def _apply_quotation_theme():
 
 def quotation_app():
     _apply_quotation_theme()
+
+    # Ensure session_state keys exist to avoid runtime KeyError when Streamlit first loads
+    if 'product_table' not in st.session_state:
+        st.session_state.product_table = pd.DataFrame(columns=[
+            'Product / Device', 'Qty', 'Unit Price (AED)', 'Line Total (AED)', 'Warranty (Years)', 'Item No'
+        ])
 
         # (Header hero removed to match invoice page)
 
@@ -409,7 +425,7 @@ def quotation_app():
             with cols[0]:
                 st.markdown(f"""
                     <div class='added-product-row'>
-                        <span style="font-weight:bold;color:rgba(10,132,255,.65);">✓</span>
+                        <span style="font-weight:bold;color:var(--accent);">✓</span>
                         <span style="font-weight:600;color:#1f2937;">{row['Product / Device']}</span>
                     </div>
                 """, unsafe_allow_html=True)
@@ -821,6 +837,16 @@ def quotation_app():
     percent_value = (product_total + installation_cost_val) * (discount_percent_val / 100)
     total_discount = percent_value + discount_value_val
     grand_total = (product_total + installation_cost_val) - total_discount
+
+    # Ensure the variables used below exist and have sensible defaults.
+    client_name = st.session_state.get('quo_client_name', '')
+    client_location = st.session_state.get('quo_loc', '')
+    quote_no = st.session_state.get('quo_no', datetime.today().strftime('QUO-%Y%m%d-001'))
+    phone_raw = st.session_state.get('quo_phone', '')
+    client_phone = phone_raw
+    _s = load_settings()
+    prepared_by = _s.get('default_prepared_by', '')
+    approved_by = _s.get('default_approved_by', '')
 
     data_to_fill = {
         "{{client_name}}": client_name,

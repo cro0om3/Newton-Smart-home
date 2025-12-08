@@ -20,6 +20,12 @@ from pathlib import Path
 # Persist UI theme in session state
 if "ui_theme" not in st.session_state:
     st.session_state.ui_theme = "light"
+# Accent overlay (keeps light/dark but applies an accent color scheme)
+if 'ui_accent' not in st.session_state:
+    try:
+        st.session_state.ui_accent = load_settings().get('ui_accent', 'none')
+    except Exception:
+        st.session_state.ui_accent = 'none'
 
 light_css = """
 <style>
@@ -37,6 +43,9 @@ light_css = """
 
     --button: #0A84FF;
     --button-hover: #5AC8FA;
+
+    /* Winter hover glow */
+    --hover-glow-rgba: rgba(90,200,250,0.12);
 
     --accent: #0A84FF;
 
@@ -123,6 +132,53 @@ def inject_theme():
         st.markdown(light_css, unsafe_allow_html=True)
     else:
         st.markdown(dark_css, unsafe_allow_html=True)
+    # Inject accent overlay if selected
+    accent = st.session_state.get('ui_accent', 'none')
+    if accent == 'winter':
+        st.markdown(
+            """
+            <style>
+            :root {
+                --accent: #7FD3FF; /* winter accent variant */
+                --button: #7FD3FF;
+                --button-hover: #AEEBFF;
+            }
+            /* subtle overlay for selected controls */
+            button[key^="nav_"]:hover, button[key^="sidenav_"]:hover, [data-testid="stButton"] > button:hover {
+                box-shadow: 0 10px 36px rgba(127,211,255,0.12) !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+    # Show a small startup toast if an accent is active (only once per session)
+    if st.session_state.get('ui_accent', 'none') != 'none' and not st.session_state.get('_accent_toast_shown', False):
+        acc = st.session_state.get('ui_accent', 'none')
+        # Arabic message with dismiss (X) and auto-hide after 5s
+        st.markdown(
+            """
+            <div id='accent_toast' style='position:fixed;right:20px;bottom:20px;z-index:99999;direction:rtl;'>
+                <div style='background:rgba(10,132,255,0.06);border:1px solid rgba(127,211,255,0.18);padding:10px 14px;border-radius:10px;color:var(--text);backdrop-filter:blur(6px);box-shadow:0 6px 18px rgba(0,0,0,.12);min-width:180px;display:flex;align-items:center;gap:10px;'>
+                    <div style='flex:1'>
+                        <div style='font-size:13px;'>الثيم النشط:</div>
+                        <div style='font-weight:700;color:var(--accent);'>""" + acc + """</div>
+                    </div>
+                    <button id='accent_toast_close' style='background:transparent;border:0;color:var(--text);font-weight:700;cursor:pointer;padding:6px 8px;border-radius:6px;'>✕</button>
+                </div>
+            </div>
+            <script>
+                const toast = document.getElementById('accent_toast');
+                const closeBtn = document.getElementById('accent_toast_close');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', function(){ toast.style.transition='opacity 400ms'; toast.style.opacity='0'; setTimeout(function(){ toast.remove() },420); });
+                }
+                // Auto-hide after 5 seconds
+                setTimeout(function(){ if (toast) { toast.style.transition='opacity 600ms'; toast.style.opacity='0'; setTimeout(function(){ try{ toast.remove() }catch(e){} },620); } }, 5000);
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.session_state['_accent_toast_shown'] = True
 
 
 st.set_page_config(page_title="Newton Smart Home OS", layout="wide")
@@ -344,7 +400,8 @@ st.markdown(
     }
     [data-testid="stButton"] > button:hover{
         transform: translateY(-2px) !important;
-        box-shadow: 0 6px 14px rgba(0,0,0,.12) !important;
+        /* Winter-style hover: subtle icy glow using the accent hover color */
+        box-shadow: 0 8px 30px var(--hover-glow-rgba) !important;
     }
 
     /* Uniform compact sizing for top nav buttons (4 cards) */
@@ -359,6 +416,7 @@ st.markdown(
         white-space: nowrap !important;
         font-size: 13px !important;
         line-height: 1 !important;
+        transition: transform .18s ease, box-shadow .18s ease, background .12s ease !important;
     }
     /* Sidebar items consistent height as well */
     button[key^="sidenav_"]{
@@ -474,7 +532,7 @@ st.markdown(
 
     /* Nav buttons (default neutral, active accent) */
     button[key^="nav_"] { background: var(--bg-card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
-    button[key^="nav_"]:hover { background: var(--button-hover) !important; color: #ffffff !important; }
+    button[key^="nav_"]:hover { background: var(--button-hover) !important; color: #ffffff !important; transform: translateY(-2px) !important; box-shadow: 0 8px 30px var(--hover-glow-rgba) !important; }
 
     /* Sidebar buttons (default neutral, active accent set below) */
     button[key^="sidenav_"] { background: var(--bg-card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
@@ -712,6 +770,7 @@ st.markdown(
         justify-content: center !important;
         border-radius: 12px !important;
         font-size: 0.93rem !important;
+        transition: transform .18s ease, box-shadow .18s ease, background .12s ease !important;
     }
 
     /* Global form controls to match Invoice  pages */
@@ -821,7 +880,7 @@ st.markdown(
 
     /* Sidebar buttons (default neutral, active accent set below) */
     button[key^="sidenav_"] { background: var(--bg-card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
-    button[key^="sidenav_"]:hover { background: var(--button-hover) !important; color: #ffffff !important; }
+    button[key^="sidenav_"]:hover { background: var(--button-hover) !important; color: #ffffff !important; transform: translateY(-2px) !important; box-shadow: 0 8px 30px var(--hover-glow-rgba) !important; }
 
     /* Inputs */
     [data-testid="stTextInput"] input,

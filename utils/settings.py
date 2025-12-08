@@ -19,6 +19,7 @@ DEFAULT_SETTINGS = {
     "ui_product_image_height_px": 195,
     "quote_product_image_width_cm": 3.49,
     "quote_product_image_height_cm": 1.5
+    ,"ui_accent": "none"
 }
 
 
