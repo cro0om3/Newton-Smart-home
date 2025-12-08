@@ -661,71 +661,73 @@ def system_config_section(user, user_name):
         
         st.markdown('<div class="spacing-md"></div>', unsafe_allow_html=True)
         
-        if st.form_submit_button("Save Configuration", type="primary"):
-            settings.update({
-                "company_name": company_name,
-                "default_prepared_by": prepared_by,
-                "default_approved_by": approved_by,
-                "contact_email": email,
-                "contact_phone": phone,
-                "currency": currency,
-                "ui_product_image_width_px": int(ui_w),
-                "ui_product_image_height_px": int(ui_h),
-                "quote_product_image_width_cm": float(q_w),
-                "quote_product_image_height_cm": float(q_h)
+        save_clicked = st.form_submit_button("Save Configuration", type="primary")
+
+    if save_clicked:
+        settings.update({
+            "company_name": company_name,
+            "default_prepared_by": prepared_by,
+            "default_approved_by": approved_by,
+            "contact_email": email,
+            "contact_phone": phone,
+            "currency": currency,
+            "ui_product_image_width_px": int(ui_w),
+            "ui_product_image_height_px": int(ui_h),
+            "quote_product_image_width_cm": float(q_w),
+            "quote_product_image_height_cm": float(q_h)
+        })
+        save_settings(settings)
+        log_event(user_name, "Settings", "config_updated", "System configuration saved")
+        st.success("✓ Configuration saved successfully")
+        st.rerun()
+
+    st.markdown('<div class="spacing-lg"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="crm-subsection">\u0623\u062f\u0648\u0627\u062a \u0627\u0644\u062a\u0634\u062e\u064a\u0635 \u0627\u0644\u0633\u0631\u064a\u0639</div>', unsafe_allow_html=True)
+    st.caption("استخدم الأزرار التالية لفحص أكثر الأعطال شيوعا دون تغيير أي بيانات.")
+
+    dbg_col1, dbg_col2, dbg_col3 = st.columns(3)
+
+    if dbg_col1.button("\u200f\u0641\u062d\u0635 \u0645\u0644\u0641\u0627\u062a \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a", key="debug_files"):
+        files = [
+            ("products.xlsx", "data/products.xlsx"),
+            ("customers.xlsx", "data/customers.xlsx"),
+            ("records.xlsx", "data/records.xlsx"),
+            ("users.xlsx", "data/users.xlsx"),
+            ("logs.xlsx", "data/logs.xlsx"),
+            ("settings.json", "data/settings.json")
+        ]
+        status_rows = []
+        for name, path in files:
+            exists = os.path.exists(path)
+            status_rows.append({
+                "الملف": name,
+                "المسار": path,
+                "الحالة": "موجود" if exists else "مفقود"
             })
-            save_settings(settings)
-            log_event(user_name, "Settings", "config_updated", "System configuration saved")
-            st.success("✓ Configuration saved successfully")
-            st.rerun()
+        st.dataframe(pd.DataFrame(status_rows))
 
-        st.markdown('<div class="spacing-lg"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="crm-subsection">\u0623\u062f\u0648\u0627\u062a \u0627\u0644\u062a\u0634\u062e\u064a\u0635 \u0627\u0644\u0633\u0631\u064a\u0639</div>', unsafe_allow_html=True)
-        st.caption("استخدم الأزرار التالية لفحص أكثر الأعطال شيوعا دون تغيير أي بيانات.")
+    if dbg_col2.button("\u200f\u0639\u0631\u0636 \u0622\u062e\u0631 \u0627\u0644\u0633\u062c\u0644\u0627\u062a", key="debug_logs"):
+        logs_df = load_logs()
+        if logs_df.empty:
+            st.info("لا توجد سجلات محفوظة حاليا.")
+        else:
+            preview = logs_df.head(10)
+            st.dataframe(preview)
 
-        dbg_col1, dbg_col2, dbg_col3 = st.columns(3)
-
-        if dbg_col1.button("\u200f\u0641\u062d\u0635 \u0645\u0644\u0641\u0627\u062a \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a", key="debug_files"):
-            files = [
-                ("products.xlsx", "data/products.xlsx"),
-                ("customers.xlsx", "data/customers.xlsx"),
-                ("records.xlsx", "data/records.xlsx"),
-                ("users.xlsx", "data/users.xlsx"),
-                ("logs.xlsx", "data/logs.xlsx"),
-                ("settings.json", "data/settings.json")
-            ]
-            status_rows = []
-            for name, path in files:
-                exists = os.path.exists(path)
-                status_rows.append({
-                    "الملف": name,
-                    "المسار": path,
-                    "الحالة": "موجود" if exists else "مفقود"
-                })
-            st.dataframe(pd.DataFrame(status_rows))
-
-        if dbg_col2.button("\u200f\u0639\u0631\u0636 \u0622\u062e\u0631 \u0627\u0644\u0633\u062c\u0644\u0627\u062a", key="debug_logs"):
-            logs_df = load_logs()
-            if logs_df.empty:
-                st.info("لا توجد سجلات محفوظة حاليا.")
+    if dbg_col3.button("\u200f\u0641\u062d\u0635 \u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0627\u062a\u0635\u0627\u0644", key="debug_connection"):
+        if _db is None:
+            st.warning("مكتبة قاعدة البيانات غير محمّلة حاليا.")
+        else:
+            try:
+                conn_value = _db.get_connection_string()
+            except Exception as err:
+                st.error(f"خطأ أثناء قراءة الإعدادات: {err}")
             else:
-                preview = logs_df.head(10)
-                st.dataframe(preview)
-
-        if dbg_col3.button("\u200f\u0641\u062d\u0635 \u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u0627\u062a\u0635\u0627\u0644", key="debug_connection"):
-            if _db is None:
-                st.warning("مكتبة قاعدة البيانات غير محمّلة حاليا.")
-            else:
-                try:
-                    conn_value = _db.get_connection_string()
-                except Exception as err:
-                    st.error(f"خطأ أثناء قراءة الإعدادات: {err}")
+                if conn_value:
+                    masked = conn_value[: min(6, len(conn_value))] + "***"
+                    st.success(f"تم العثور على سلسلة اتصال: {masked}")
                 else:
-                    if conn_value:
-                        masked = conn_value[: min(6, len(conn_value))] + "***"
-                        st.success(f"تم العثور على سلسلة اتصال: {masked}")
-                    else:
-                        st.info("لا توجد سلسلة اتصال مهيأة. تأكد من secrets أو المتغيرات البيئية.")
+                    st.info("لا توجد سلسلة اتصال مهيأة. تأكد من secrets أو المتغيرات البيئية.")
 
 
 # ========================================================
